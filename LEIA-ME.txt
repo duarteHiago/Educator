@@ -1,0 +1,33 @@
+=============================================
+ EDUCATOR — Automacao de Atividades AVA
+=============================================
+
+PRIMEIRO USO
+------------
+1. Execute "setup.bat" UMA VEZ para instalar o navegador.
+   (Pode demorar alguns minutos — aguarde ate concluir.)
+
+2. Execute "educator.exe" para abrir o menu.
+   Na primeira abertura, sera solicitado:
+   - CPF (somente numeros)
+   - Senha do AVA Educ
+   - Token de acesso (fornecido pelo desenvolvedor)
+
+USO NORMAL
+----------
+- Basta executar "educator.exe"
+- Selecione a materia e as unidades desejadas
+- Escolha o modo: AUTO_MODE (submete) ou DRY_RUN (so visualiza)
+
+REDEFINIR CREDENCIAIS
+---------------------
+Execute no terminal dentro desta pasta:
+   educator.exe --reset-config
+
+PROBLEMAS?
+----------
+Entre em contato com o desenvolvedor informando:
+- O erro exibido na tela
+- A materia/atividade que estava tentando executar
+
+=============================================

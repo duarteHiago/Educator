@@ -7,6 +7,7 @@ Uso:
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import sys
 import time
@@ -307,9 +308,90 @@ async def execute(candidates: list[ActivityInfo], mode: ExecutionMode, force: bo
     display.show_final_summary(successful, failed, avg_score)
 
 
+# ── Live Discovery ────────────────────────────────────────────────────────────
+
+def _map_is_empty() -> bool:
+    path = Path("logs/activity_map.json")
+    if not path.exists():
+        return True
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) == []
+    except Exception:
+        return True
+
+
+async def _run_discovery_async() -> int:
+    from backend.automation.discovery.live_discovery import run_full_discovery
+
+    def _on_progress(msg: str) -> None:
+        console.print(f"  [cyan]  {msg}[/cyan]")
+
+    async with get_browser_context(restore_session=True) as (context, browser, pw):
+        page = await ensure_authenticated(context)
+        activities = await run_full_discovery(page, on_progress=_on_progress)
+
+    return len(activities)
+
+
+def _prompt_and_run_discovery() -> bool:
+    """Exibe aviso, pergunta confirmação e executa o discovery. Retorna True se concluído."""
+    console.print()
+    console.print(Panel(
+        Text(
+            "  Nenhuma atividade mapeada.\n\n"
+            "  O sistema precisa mapear suas disciplinas no AVA Educ.\n"
+            "  Isso leva cerca de 2-4 minutos e só é necessário uma vez\n"
+            "  (ou quando novas disciplinas forem adicionadas).",
+            style="yellow",
+        ),
+        border_style="yellow",
+        expand=False,
+    ))
+    console.print()
+
+    confirm = questionary.confirm(
+        "Mapear atividades agora?",
+        default=True,
+        style=_STYLE,
+    ).ask()
+
+    if not confirm:
+        return False
+
+    console.print()
+    console.print(Panel(
+        Text("  Mapeando disciplinas... aguarde.", style="cyan"),
+        border_style="cyan",
+        expand=False,
+    ))
+    console.print()
+
+    total = asyncio.run(_run_discovery_async())
+
+    console.print()
+    if total > 0:
+        console.print(
+            f"  [bold green]Mapeamento concluído:[/bold green] "
+            f"[white]{total}[/white] atividades encontradas."
+        )
+    else:
+        console.print(
+            "  [yellow]Nenhuma atividade encontrada. "
+            "Verifique se está matriculado em disciplinas no AVA.[/yellow]"
+        )
+    console.print()
+    return total > 0
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    if _map_is_empty():
+        ok = _prompt_and_run_discovery()
+        if not ok:
+            console.print("\n[dim]  Saindo.[/dim]\n")
+            return
+
     discovery  = ActivityDiscovery(Path("logs/activity_map.json")).load()
     all_quizzes = [
         a for a in discovery.all_activities()
