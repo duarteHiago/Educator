@@ -1,0 +1,67 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: educator
+      POSTGRES_USER: educator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    # NÃO expõe porta para o host — acessível só pela rede interna
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_SECRET: ${ADMIN_SECRET}
+      LITELLM_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      ALLOWED_ORIGIN: https://educator.yaatoro.com
+    depends_on:
+      - postgres
+    networks:
+      - internal
+    # NÃO expõe porta — acessível só via nginx
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - internal
+
+  # LiteLLM já rodando separado — referenciado pela rede interna
+  # Se precisar incluir neste compose no futuro, adicionar aqui.
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
