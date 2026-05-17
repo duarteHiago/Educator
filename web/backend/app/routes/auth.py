@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -18,9 +18,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login")
-@limiter.limit("5/minute")   # brute-force protection
+@limiter.limit("5/minute")
 async def login(
-    request_obj,             # injected by slowapi via app.state.limiter
+    request: Request,          # obrigatório pelo slowapi para extrair IP
     body: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -29,7 +29,7 @@ async def login(
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
-    # verifica mesmo se user é None para evitar user enumeration via timing
+    # dummy hash evita user enumeration por diferença de timing
     dummy_hash = "$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     stored_hash = user.password_hash if user else dummy_hash
 
