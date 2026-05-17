@@ -8,23 +8,26 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 from cryptography.fernet import Fernet, InvalidToken
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
-# bcrypt rounds=12 — ~250 ms por hash, resistente a brute-force em GPUs
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+# rounds=12 — ~250 ms por hash, resistente a brute-force em GPUs
+_ROUNDS = 12
 
 
 # ── Passwords ─────────────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
-    return _pwd_ctx.hash(plain)
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt(rounds=_ROUNDS)).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    # passlib usa constant-time internamente
-    return _pwd_ctx.verify(plain, hashed)
+    # checkpw usa constant-time internamente
+    try:
+        return _bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
