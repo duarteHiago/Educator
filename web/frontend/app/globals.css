@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+body {
+  background-color: #080808;
+  color: #e0e0e0;
+  font-family: 'JetBrains Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: #00bfff33; }
+
+.glow-cyan { text-shadow: 0 0 20px #00bfff66; }
+.glow-green { text-shadow: 0 0 20px #00ff9966; }
+
+.card {
+  background: #111111;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+}
+
+.btn-primary {
+  background: #00bfff;
+  color: #080808;
+  font-weight: 700;
+  padding: 10px 24px;
+  border-radius: 6px;
+  transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-ghost {
+  border: 1px solid #1e1e1e;
+  color: #aaa;
+  padding: 10px 24px;
+  border-radius: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-ghost:hover { border-color: #00bfff; color: #00bfff; }
+
+.input {
+  background: #0d0d0d;
+  border: 1px solid #1e1e1e;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #e0e0e0;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: #00bfff; }
