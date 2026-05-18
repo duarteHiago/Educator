@@ -15,6 +15,7 @@ Flags:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -49,7 +50,9 @@ def _install_browser() -> None:
         driver_dir = Path(sys._MEIPASS) / "playwright" / "driver"
         node = driver_dir / "node.exe"
         cli  = driver_dir / "package" / "cli.js"
-        result = subprocess.run([str(node), str(cli), "install", "chromium"], check=False)
+        env = os.environ.copy()
+        env["PLAYWRIGHT_BROWSERS_PATH"] = "0"  # instala em .local-browsers dentro do bundle
+        result = subprocess.run([str(node), str(cli), "install", "chromium"], env=env, check=False)
     else:
         result = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
