@@ -1,6 +1,6 @@
-from __future__ import annotations
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -20,8 +20,8 @@ limiter = Limiter(key_func=get_remote_address)
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login(
-    request: Request,          # obrigatório pelo slowapi para extrair IP
-    body: LoginRequest,
+    request: Request,
+    body: Annotated[LoginRequest, Body()],
     response: Response,
     db: AsyncSession = Depends(get_db),
     settings=Depends(get_settings),
