@@ -7,3 +7,9 @@ __pycache__/
 docs/VPS_PROXY.md
 build/
 dist/
+
+# Scripts operacionais com credenciais (uso local apenas)
+web/vps_*.py
+web/cf_dns_and_ssl.py
+web/check_logs.py
+web/create_user*.py
