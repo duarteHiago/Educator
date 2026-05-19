@@ -4,7 +4,9 @@ import logging
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,7 @@ from app.security import decrypt_token, encrypt_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["tokens"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _mask(key: str) -> str:
@@ -67,12 +70,13 @@ async def _litellm_revoke(settings, key: str) -> None:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/generate", response_model=TokenGenerated)
+@limiter.limit("5/hour")
 async def generate_token(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     settings=Depends(get_settings),
 ):
-    # Revoga token existente antes de criar novo
     result = await db.execute(select(Token).where(Token.user_id == user.id))
     existing = result.scalar_one_or_none()
 
@@ -81,7 +85,6 @@ async def generate_token(
             old_key = decrypt_token(existing.encrypted_key)
             await _litellm_revoke(settings, old_key)
         except Exception:
-            # se LiteLLM falhar, ainda deleta do banco
             logger.warning("revoke_litellm_failed user=%s", user.id)
         await db.delete(existing)
         await db.flush()
@@ -99,9 +102,7 @@ async def generate_token(
         key_alias=alias,
     )
     db.add(token_row)
-    # commit via get_db context manager
 
-    # raw_key exibido apenas nesta resposta — nunca mais exposto
     return TokenGenerated(full_key=raw_key, key_alias=alias)
 
 
@@ -149,7 +150,9 @@ async def revoke_token(
 # ── Endpoints chamados pelo .exe ──────────────────────────────────────────────
 
 @router.post("/bind", response_model=ValidateResponse)
+@limiter.limit("10/hour")
 async def bind_hostname(
+    request: Request,
     body: BindRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -157,7 +160,6 @@ async def bind_hostname(
     Chamado pelo educator.exe na primeira execução.
     Vincula o token ao hostname da máquina.
     """
-    # Busca o token pelo conteúdo decriptado — comparação segura
     result = await db.execute(select(Token).where(Token.is_active == True))
     tokens = result.scalars().all()
 
@@ -174,26 +176,26 @@ async def bind_hostname(
         raise HTTPException(status_code=404, detail="Token não encontrado")
 
     if matched.hostname is not None:
-        # Já vinculado — verifica se é a mesma máquina
         if matched.hostname != body.hostname:
             logger.warning("bind_mismatch alias=%s", matched.key_alias)
             return ValidateResponse(valid=False, message="Token já vinculado a outra máquina")
         return ValidateResponse(valid=True, message="OK")
 
-    # Primeiro uso — vincula
     matched.hostname = body.hostname
     matched.last_used_at = datetime.now(timezone.utc)
     return ValidateResponse(valid=True, message="Token vinculado com sucesso")
 
 
 @router.post("/validate", response_model=ValidateResponse)
+@limiter.limit("30/minute")
 async def validate_token(
+    request: Request,
     body: ValidateRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Chamado pelo educator.exe a cada inicialização.
-    Verifica se token + hostname são válidos.
+    Verifica se token + hostname são válidos. Requer bind prévio via /bind.
     """
     result = await db.execute(select(Token).where(Token.is_active == True))
     tokens = result.scalars().all()
@@ -211,10 +213,7 @@ async def validate_token(
         return ValidateResponse(valid=False, message="Token inválido ou revogado")
 
     if matched.hostname is None:
-        # Ainda não vinculado — bind agora
-        matched.hostname = body.hostname
-        matched.last_used_at = datetime.now(timezone.utc)
-        return ValidateResponse(valid=True, message="OK")
+        return ValidateResponse(valid=False, message="Token ainda não vinculado. Execute o educator.exe uma vez primeiro.")
 
     if matched.hostname != body.hostname:
         return ValidateResponse(valid=False, message="Token não autorizado nesta máquina")

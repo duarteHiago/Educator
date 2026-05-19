@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import Cookie, Depends, HTTPException, status
-from jose import JWTError
+from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,7 @@ async def get_current_user(
 
     try:
         user_id = decode_access_token(access_token, settings.secret_key)
-    except JWTError:
+    except PyJWTError:
         raise credentials_exc
 
     result = await db.execute(select(User).where(User.id == user_id))
