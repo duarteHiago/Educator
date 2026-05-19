@@ -22,15 +22,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-
             cd /opt/educator-web
             git fetch origin main
             git reset --hard origin/main
-
             cd web
             docker compose up -d --build
-
-            echo ""
             echo "=== Containers ==="
             docker compose ps
 
@@ -43,17 +39,10 @@ jobs:
           script: |
             sleep 10
             cd /opt/educator-web/web
-            STATUS=$(docker compose exec -T backend python3 -c "
-import urllib.request
-try:
-    with urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5) as r:
-        print(r.status)
-except Exception as e:
-    print(0)
-")
+            STATUS=$(docker compose exec -T backend python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status)" 2>/dev/null || echo "000")
             echo "Backend /health → HTTP $STATUS"
             if [ "$STATUS" != "200" ]; then
-              echo "ERRO: backend não respondeu com 200"
+              echo "ERRO: backend nao respondeu com 200"
               docker compose logs --tail=50 backend
               exit 1
             fi
