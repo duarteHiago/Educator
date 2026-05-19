@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     proxy_token: str = ""
 
     # Evolution engine
-    perf_window_size: int = 5
+    perf_window_size: int = 3
     perf_accuracy_threshold: float = 0.70
     perf_history_file: Path = Path("./logs/performance_history.json")
     perf_active_config_file: Path = Path("./logs/active_model_config.json")
