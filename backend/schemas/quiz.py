@@ -40,7 +40,9 @@ class QuizQuestion(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def question_hash(self) -> str:
-        return hashlib.sha256(self.text.strip().encode()).hexdigest()
+        alts_fingerprint = "|".join(sorted(a.text for a in self.alternatives))
+        content = f"{self.text.strip()}\n{alts_fingerprint}"
+        return hashlib.sha256(content.encode()).hexdigest()
 
 
 # ── Quiz attempt ──────────────────────────────────────────────────────────────

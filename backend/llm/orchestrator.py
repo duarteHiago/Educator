@@ -58,7 +58,7 @@ class LLMOrchestrator:
         return build_provider(provider, model)  # same if already at top
 
     async def answer_question(self, question: QuizQuestion) -> LLMResponse:
-        cached = question_cache.get(question.question_hash)
+        cached = question_cache.get(question.question_hash, model=self._primary.model_name)
         if cached:
             return cached
 
@@ -80,6 +80,9 @@ class LLMOrchestrator:
                 confidence=resp.confidence,
                 fallback=self._fallback.model_name,
             )
+            cached_fb = question_cache.get(question.question_hash, model=self._fallback.model_name)
+            if cached_fb:
+                return cached_fb
             req_fb = req.model_copy(update={
                 "model":    self._fallback.model_name,
                 "provider": self._fallback.provider_name,
