@@ -43,7 +43,14 @@ jobs:
           script: |
             sleep 10
             cd DEPLOY_DIR/web
-            STATUS=$(docker compose exec -T backend curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || echo "000")
+            STATUS=$(docker compose exec -T backend python3 -c "
+import urllib.request
+try:
+    with urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5) as r:
+        print(r.status)
+except Exception as e:
+    print(0)
+")
             echo "Backend /health → HTTP $STATUS"
             if [ "$STATUS" != "200" ]; then
               echo "ERRO: backend não respondeu com 200"
