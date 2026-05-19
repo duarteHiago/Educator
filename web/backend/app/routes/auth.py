@@ -30,7 +30,7 @@ async def login(
     user = result.scalar_one_or_none()
 
     # dummy hash evita user enumeration por diferença de timing
-    dummy_hash = "$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    dummy_hash = "$2b$12$tHSwd1myzhXcCXyqBM8lxeoFqOdkHbErOXefkbEVL4Ah.HPV0dvyK"
     stored_hash = user.password_hash if user else dummy_hash
 
     if not verify_password(body.password, stored_hash) or user is None or not user.is_active:

@@ -9,8 +9,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt as _bcrypt
+import jwt as _jwt
 from cryptography.fernet import Fernet, InvalidToken
-from jose import JWTError, jwt
 
 # rounds=12 — ~250 ms por hash, resistente a brute-force em GPUs
 _ROUNDS = 12
@@ -35,15 +35,15 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(user_id: str, secret_key: str, expires_minutes: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     payload = {"sub": user_id, "exp": expire}
-    return jwt.encode(payload, secret_key, algorithm="HS256")
+    return _jwt.encode(payload, secret_key, algorithm="HS256")
 
 
 def decode_access_token(token: str, secret_key: str) -> str:
-    """Retorna user_id ou levanta JWTError."""
-    payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+    """Retorna user_id ou levanta PyJWTError."""
+    payload = _jwt.decode(token, secret_key, algorithms=["HS256"])
     user_id: str | None = payload.get("sub")
     if user_id is None:
-        raise JWTError("missing sub")
+        raise _jwt.PyJWTError("missing sub")
     return user_id
 
 
