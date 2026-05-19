@@ -13,3 +13,4 @@ web/vps_*.py
 web/cf_dns_and_ssl.py
 web/check_logs.py
 web/create_user*.py
+docs/
