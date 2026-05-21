@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timezone
+from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -153,7 +152,7 @@ async def revoke_token(
 @limiter.limit("10/hour")
 async def bind_hostname(
     request: Request,
-    body: BindRequest,
+    body: Annotated[BindRequest, Body()],
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -190,7 +189,7 @@ async def bind_hostname(
 @limiter.limit("30/minute")
 async def validate_token(
     request: Request,
-    body: ValidateRequest,
+    body: Annotated[ValidateRequest, Body()],
     db: AsyncSession = Depends(get_db),
 ):
     """

@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 import logging
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
@@ -23,19 +23,32 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Educator API",
-    docs_url=None,      # desativa Swagger em produção
+    docs_url=None,
     redoc_url=None,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.allowed_origin, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", "X-Admin-Secret"],
+    allow_headers=["Content-Type"],
 )
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        headers={"Retry-After": "60"},
+        content={"detail": "Muitas tentativas. Tente novamente em instantes."},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": "Dados inválidos"})
 
 
 @app.on_event("startup")
