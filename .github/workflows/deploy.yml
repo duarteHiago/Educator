@@ -22,7 +22,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.DEPLOY_PATH }}
+            cd "${{ secrets.DEPLOY_PATH }}"
             git fetch origin main
             git reset --hard origin/main
             cd web
@@ -38,7 +38,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             sleep 10
-            cd ${{ secrets.DEPLOY_PATH }}/web
+            cd "${{ secrets.DEPLOY_PATH }}/web"
             STATUS=$(docker compose exec -T backend python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status)" 2>/dev/null || echo "000")
             echo "Backend /health → HTTP $STATUS"
             if [ "$STATUS" != "200" ]; then
