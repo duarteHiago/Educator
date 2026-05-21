@@ -20,15 +20,14 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       ADMIN_SECRET: ${ADMIN_SECRET}
-      # Alcança o LiteLLM pela rede litellm_network
-      LITELLM_URL: http://litellm:4000
+      LITELLM_URL: http://${LITELLM_CONTAINER}:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      ALLOWED_ORIGIN: https://educator.yaatoro.com
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN}
     depends_on:
       - postgres
     networks:
       - internal
-      - litellm_network  # rede onde o LiteLLM está
+      - litellm_network
 
   frontend:
     build: ./frontend
@@ -63,4 +62,5 @@ networks:
   internal:
     driver: bridge
   litellm_network:
-    external: true   # rede já existente do docker-compose do LiteLLM
+    external: true
+    name: ${LITELLM_NETWORK}
