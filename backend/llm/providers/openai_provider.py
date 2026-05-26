@@ -55,6 +55,9 @@ def _recover_partial_json(raw: str) -> dict | None:
     }
 
 
+_TIMEOUT = 90.0  # segundos — gpt-4o-mini é rápido, 90s é mais que suficiente
+
+
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, model: str | None = None) -> None:
         self._model = model or settings.llm_model_primary
@@ -62,9 +65,15 @@ class OpenAIProvider(BaseLLMProvider):
             self._client = AsyncOpenAI(
                 api_key=settings.proxy_token,
                 base_url=settings.proxy_url,
+                timeout=_TIMEOUT,
+                max_retries=2,
             )
         else:
-            self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+            self._client = AsyncOpenAI(
+                api_key=settings.openai_api_key,
+                timeout=_TIMEOUT,
+                max_retries=2,
+            )
 
     @property
     def model_name(self) -> str:

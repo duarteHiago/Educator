@@ -34,12 +34,18 @@ class AnthropicProvider(BaseLLMProvider):
             self._proxy_client = AsyncOpenAI(
                 api_key=settings.proxy_token,
                 base_url=settings.proxy_url,
+                timeout=90.0,
+                max_retries=2,
             )
             self._native_client = None
         else:
             # Modo direto: SDK nativo da Anthropic
             self._proxy_client = None
-            self._native_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            self._native_client = anthropic.AsyncAnthropic(
+                api_key=settings.anthropic_api_key,
+                timeout=90.0,
+                max_retries=2,
+            )
 
     @property
     def model_name(self) -> str:

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
+from backend.automation.utils.screenshot import capture_on_error
 from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -63,22 +64,66 @@ async def discover_enrolled_courses(ava_page: Page) -> dict[int, str]:
     """
     await ava_page.goto(f"{AVA_BASE}/my/")
     await ava_page.wait_for_load_state("networkidle")
+    await asyncio.sleep(2.0)
+
+    # Scroll para forçar carregamento lazy de cards de curso
+    await ava_page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
     await asyncio.sleep(1.5)
+    await ava_page.evaluate("window.scrollTo(0, 0)")
+    await asyncio.sleep(1.0)
 
     raw: dict = await ava_page.evaluate("""() => {
         const result = {};
-        document.querySelectorAll('a[href*="/course/view.php?id="]').forEach(a => {
+        // Selectors amplos: cobre /course/view.php e variações sem barra inicial
+        document.querySelectorAll('a[href*="course/view.php?id="]').forEach(a => {
             const m = a.href.match(/course\\/view\\.php\\?id=(\\d+)/);
             if (!m) return;
             const id = parseInt(m[1]);
             if (id <= 1) return;
-            const name = (a.innerText || a.title || a.getAttribute('data-original-title') || '').trim();
+            const name = (
+                a.innerText ||
+                a.title ||
+                a.getAttribute('data-original-title') ||
+                a.getAttribute('aria-label') ||
+                ''
+            ).trim().replace(/\\s+/g, ' ');
             if (name && !result[id]) result[id] = name;
         });
         return result;
     }""")
 
     courses = {int(k): v for k, v in raw.items()}
+
+    # Fallback: tenta /my/courses.php se /my/ não retornou nada
+    if not courses:
+        await capture_on_error(ava_page, label="diag_my_empty")
+        logger.warning("live_discovery.screenshot_saved_check_logs_screenshots")
+        logger.info("live_discovery.fallback_courses_page")
+        await ava_page.goto(f"{AVA_BASE}/my/courses.php")
+        await ava_page.wait_for_load_state("networkidle")
+        await asyncio.sleep(2.0)
+        await ava_page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await asyncio.sleep(1.5)
+        raw = await ava_page.evaluate("""() => {
+            const result = {};
+            document.querySelectorAll('a[href*="course/view.php?id="]').forEach(a => {
+                const m = a.href.match(/course\\/view\\.php\\?id=(\\d+)/);
+                if (!m) return;
+                const id = parseInt(m[1]);
+                if (id <= 1) return;
+                const name = (
+                    a.innerText || a.title ||
+                    a.getAttribute('data-original-title') ||
+                    a.getAttribute('aria-label') || ''
+                ).trim().replace(/\\s+/g, ' ');
+                if (name && !result[id]) result[id] = name;
+            });
+            return result;
+        }""")
+        courses = {int(k): v for k, v in raw.items()}
+        if not courses:
+            await capture_on_error(ava_page, label="diag_courses_page_empty")
+
     logger.info("live_discovery.courses_found", total=len(courses), ids=list(courses.keys()))
     return courses
 
@@ -179,8 +224,12 @@ async def run_full_discovery(
     if on_progress:
         on_progress("Acessando AVA Educ...")
 
-    await portal_page.goto(ESTUDAR_URL)
-    ava_page = await _wait_for_ava_page(portal_page.context)
+    # Se já estiver no AVA (chamado após ensure_authenticated), usa direto
+    if "avaeduc.com.br" in portal_page.url:
+        ava_page = portal_page
+    else:
+        await portal_page.goto(ESTUDAR_URL)
+        ava_page = await _wait_for_ava_page(portal_page.context)
 
     if on_progress:
         on_progress("Buscando disciplinas matriculadas...")

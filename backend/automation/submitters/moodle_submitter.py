@@ -19,6 +19,7 @@ from playwright.async_api import Page
 
 from backend.automation.flows.quiz_flow import dismiss_overlays, js_click
 from backend.automation.parsers.moodle import selectors as sel
+from backend.automation.utils.screenshot import capture_on_error
 from backend.core.logging import get_logger
 from backend.schemas.quiz import (
     ParsedQuiz, ReviewedAnswer, ReviewStatus,
@@ -59,6 +60,10 @@ async def fill_answers(
             failed_slots.append(slot)
 
     attempt_id  = quiz.meta.attempt_id
+    logger.info("submitter.fill_start",
+                attempt_id=attempt_id,
+                total_slots=len(answer_map),
+                pages=sorted(page_groups.keys()))
     sorted_pages = sorted(page_groups.keys())
 
     for page_idx, page_num in enumerate(sorted_pages):
@@ -70,8 +75,13 @@ async def fill_answers(
             logger.info("submitter.navigating_to_page", page=page_num, url=attempt_url)
             await page.goto(attempt_url)
             await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(1.2)
             await dismiss_overlays(page)
+            logger.info("submitter.landed", url=page.url[:100])
+            await capture_on_error(page, label=f"after_nav_page{page_num}")
+        else:
+            logger.warning("submitter.no_attempt_id_skipping_navigation")
+            await capture_on_error(page, label="no_attempt_id_current_page")
 
         for slot in page_groups[page_num]:
             reviewed_answer = answer_map[slot]
@@ -90,23 +100,60 @@ async def fill_answers(
             radio_sel = f"input[name='{target_alt.input_name}'][value='{target_alt.input_value}']"
             locator   = page.locator(radio_sel).first
 
+            logger.info("submitter.trying_radio",
+                        slot=slot, letter=chosen_letter,
+                        selector=radio_sel,
+                        current_url=page.url[:80])
+
             if await locator.count() == 0:
+                # Diagnóstico: lista todos os radios disponíveis na página
+                all_radios = await page.evaluate("""() =>
+                    Array.from(document.querySelectorAll('input[type=radio]'))
+                        .map(r => ({name: r.name, value: r.value, id: r.id}))
+                """)
                 logger.error("submitter.radio_not_found",
                              slot=slot, letter=chosen_letter,
-                             name=target_alt.input_name, value=target_alt.input_value)
+                             name=target_alt.input_name, value=target_alt.input_value,
+                             radios_on_page=all_radios[:10])
+                await capture_on_error(page, label=f"radio_not_found_slot{slot}")
                 failed_slots.append(slot)
                 continue
 
-            await locator.click()
-            await asyncio.sleep(0.3)
+            # Tenta click normal primeiro; se não marcar, força via JS
+            try:
+                await locator.click(force=True, timeout=5_000)
+            except Exception as click_err:
+                logger.warning("submitter.click_failed_trying_js",
+                               slot=slot, error=str(click_err))
+                await locator.evaluate("el => el.click()")
+            await asyncio.sleep(0.4)
 
             is_checked = await locator.is_checked()
             if not is_checked:
+                # Último recurso: força via JS direto no DOM
+                await page.evaluate(
+                    """([name, value]) => {
+                        const el = document.querySelector(
+                            `input[name='${name}'][value='${value}']`
+                        );
+                        if (el) { el.checked = true; el.dispatchEvent(new Event('change', {bubbles:true})); }
+                    }""",
+                    [target_alt.input_name, target_alt.input_value],
+                )
+                await asyncio.sleep(0.3)
+                is_checked = await locator.is_checked()
+
+            if not is_checked:
+                await capture_on_error(page, label=f"radio_fail_slot{slot}")
                 logger.error("submitter.radio_not_checked_after_click",
-                             slot=slot, letter=chosen_letter)
+                             slot=slot, letter=chosen_letter,
+                             name=target_alt.input_name, value=target_alt.input_value)
                 failed_slots.append(slot)
             else:
                 logger.info("submitter.answer_filled", slot=slot, letter=chosen_letter)
+
+        # Screenshot antes de salvar — confirma que os radios estão marcados
+        await capture_on_error(page, label=f"pre_next_page{page_num}")
 
         # Click "Next page" to save the answer server-side (all pages, including
         # the last — on the last question page Next navigates to the summary,
