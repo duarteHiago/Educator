@@ -48,7 +48,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_SECRET: ${ADMIN_SECRET}
       LITELLM_URL: http://${LITELLM_CONTAINER}:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
@@ -70,7 +72,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_SECRET: ${ADMIN_SECRET}
       LITELLM_URL: http://${LITELLM_CONTAINER}:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
