@@ -46,7 +46,7 @@ services:
       dockerfile: web/worker/Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg2://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
+      DATABASE_URL: postgresql+asyncpg://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
@@ -70,7 +70,7 @@ services:
       dockerfile: web/worker/Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg2://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
+      DATABASE_URL: postgresql+asyncpg://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}

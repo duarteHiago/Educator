@@ -6,7 +6,9 @@ from app.config import get_settings
 
 settings = get_settings()
 
-_engine = create_engine(settings.database_url, pool_pre_ping=True)
+# Derive sync URL from the asyncpg URL (worker shares DATABASE_URL with backend)
+_sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+_engine = create_engine(_sync_url, pool_pre_ping=True)
 _SessionFactory = sessionmaker(_engine, expire_on_commit=False)
 
 
