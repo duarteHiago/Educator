@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models import User, UserCredentials
 from app.schemas import CredentialsSave, CredentialsStatus
-from app.security import encrypt_token, decrypt_token  # noqa: F401 (decrypt used via import)
+from app.security import decrypt_token, encrypt_token  # noqa: F401
 
 router = APIRouter(tags=["credentials"])
 
@@ -57,7 +58,7 @@ async def get_credentials_status(
     return CredentialsStatus(exists=True, updated_at=creds.updated_at)
 
 
-@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_credentials(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

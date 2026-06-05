@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from croniter import croniter
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,7 +78,7 @@ async def toggle_schedule(
     return sched
 
 
-@router.delete("/{schedule_id}", status_code=204)
+@router.delete("/{schedule_id}", status_code=204, response_class=Response)
 async def delete_schedule(
     schedule_id: str,
     user: User = Depends(get_current_user),

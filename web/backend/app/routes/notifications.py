@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +28,7 @@ async def list_notifications(
     return result.scalars().all()
 
 
-@router.patch("/read-all", status_code=204)
+@router.patch("/read-all", status_code=204, response_class=Response)
 async def mark_all_read(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
