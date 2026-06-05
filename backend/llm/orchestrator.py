@@ -16,6 +16,7 @@ from __future__ import annotations
 from backend.core.config import settings
 from backend.core.logging import get_logger
 from backend.llm import cache as question_cache
+from backend.llm import knowledge_base as kb
 from backend.llm.performance.evolution_engine import EvolutionAction, EvolutionEngine
 from backend.llm.providers.base import BaseLLMProvider
 from backend.llm.providers.factory import build_provider
@@ -58,7 +59,29 @@ class LLMOrchestrator:
         return build_provider(provider, model)  # same if already at top
 
     async def answer_question(self, question: QuizQuestion) -> LLMResponse:
-        cached = question_cache.get(question.question_hash, model=self._primary.model_name)
+        # 1. Knowledge base lookup — skip LLM entirely if verified answer exists
+        kb_answer = await kb.lookup(question.question_hash, min_confidence=0.9)
+        if kb_answer:
+            logger.info("llm.kb_hit", hash=question.question_hash[:8], answer=kb_answer)
+            return LLMResponse(
+                question_hash=question.question_hash,
+                answer=kb_answer,
+                confidence=1.0,
+                reasoning="knowledge_base",
+                model="kb",
+                provider="kb",
+                from_cache=True,
+            )
+
+        # 2. For image questions, force a vision-capable model
+        primary = self._primary
+        fallback = self._fallback
+        if question.image_b64:
+            primary  = build_provider("openai", "gpt-4o")
+            fallback = build_provider("anthropic", "claude-sonnet-4-6")
+
+        # 3. Disk cache check
+        cached = question_cache.get(question.question_hash, model=primary.model_name)
         if cached:
             return cached
 
@@ -66,28 +89,29 @@ class LLMOrchestrator:
             question_hash  = question.question_hash,
             question_text  = question.text,
             alternatives   = question.alternatives,
-            model          = self._primary.model_name,
-            provider       = self._primary.provider_name,
+            model          = primary.model_name,
+            provider       = primary.provider_name,
             prompt_version = self._prompt_version,
+            image_b64      = question.image_b64,
         )
 
-        resp = await self._primary.complete(req)
+        resp = await primary.complete(req)
 
         if resp.confidence < _CONFIDENCE_THRESHOLD:
             logger.info(
                 "llm.low_confidence_escalating",
                 hash=question.question_hash[:8],
                 confidence=resp.confidence,
-                fallback=self._fallback.model_name,
+                fallback=fallback.model_name,
             )
-            cached_fb = question_cache.get(question.question_hash, model=self._fallback.model_name)
+            cached_fb = question_cache.get(question.question_hash, model=fallback.model_name)
             if cached_fb:
                 return cached_fb
             req_fb = req.model_copy(update={
-                "model":    self._fallback.model_name,
-                "provider": self._fallback.provider_name,
+                "model":    fallback.model_name,
+                "provider": fallback.provider_name,
             })
-            resp = await self._fallback.complete(req_fb)
+            resp = await fallback.complete(req_fb)
 
         question_cache.put(resp)
         return resp

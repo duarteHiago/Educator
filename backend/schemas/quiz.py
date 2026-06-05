@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, computed_field
 
 class QuestionType(str, Enum):
     MULTICHOICE = "multichoice"
+    TRUEFALSE   = "truefalse"
     UNKNOWN     = "unknown"
 
 
@@ -36,6 +37,8 @@ class QuizQuestion(BaseModel):
     alternatives:   list[Alternative]
     input_name:     str              # Shared radio group name
     page:           int = 0          # Which quiz page this question is on
+    has_image:      bool = False     # True when question body contains <img>
+    image_b64:      str | None = None  # Base64 screenshot of question area (filled by runner)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -77,6 +80,7 @@ class LLMRequest(BaseModel):
     model:          str
     provider:       str = "openai"
     prompt_version: str = "v1"
+    image_b64:      str | None = None  # filled when question has an image
 
 
 class LLMResponse(BaseModel):

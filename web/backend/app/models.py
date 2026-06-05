@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database import Base
@@ -34,3 +34,91 @@ class Token(Base):
     is_active     = Column(Boolean, default=True, nullable=False)
     generated_at  = Column(DateTime(timezone=True), server_default=func.now())
     last_used_at  = Column(DateTime(timezone=True), nullable=True)
+
+
+class UserCredentials(Base):
+    __tablename__ = "user_credentials"
+
+    id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id            = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    encrypted_cpf      = Column(Text, nullable=False)
+    encrypted_password = Column(Text, nullable=False)
+    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at         = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserActivity(Base):
+    __tablename__ = "user_activities"
+    __table_args__ = (UniqueConstraint("user_id", "cmid", name="uq_user_activity"),)
+
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id       = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    cmid          = Column(Integer, nullable=False)
+    course_id     = Column(Integer, nullable=False)
+    course_name   = Column(String(512), nullable=False, default="")
+    activity_type = Column(String(32), nullable=False)   # quiz | material | open_only | unknown
+    title         = Column(String(512), nullable=False, default="")
+    url           = Column(Text, nullable=True)
+    discovered_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QuizExecution(Base):
+    __tablename__ = "quiz_executions"
+
+    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id             = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    execution_id        = Column(String(32), nullable=False, unique=True)
+    cmid                = Column(Integer, nullable=False)
+    course_id           = Column(Integer, nullable=False)
+    mode                = Column(String(16), nullable=False)    # DRY_RUN | AUTO_MODE
+    status              = Column(String(16), nullable=False, default="pending")  # pending | running | success | failed
+    score_percent       = Column(Float, nullable=True)
+    grade_string        = Column(String(64), nullable=True)
+    questions_total     = Column(Integer, default=0)
+    questions_answered  = Column(Integer, default=0)
+    celery_task_id      = Column(String(255), nullable=True)
+    error_message       = Column(Text, nullable=True)
+    started_at          = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at         = Column(DateTime(timezone=True), nullable=True)
+
+
+class AnswerKnowledgeBase(Base):
+    __tablename__ = "answer_knowledge_base"
+
+    id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    question_hash      = Column(String(64), nullable=False, unique=True, index=True)
+    correct_answer     = Column(String(4), nullable=False)   # "A", "B", "C", ...
+    confidence         = Column(Float, nullable=False)
+    confirmation_count = Column(Integer, nullable=False, default=1)
+    last_confirmed_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScheduledRun(Base):
+    __tablename__ = "scheduled_runs"
+
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id     = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    course_id   = Column(Integer, nullable=True)   # None = todos os cursos descobertos
+    cron_expr   = Column(String(64), nullable=False)   # e.g. "0 3 * * *"
+    mode        = Column(String(16), nullable=False, default="AUTO_MODE")
+    is_active   = Column(Boolean, default=True, nullable=False)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id    = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title      = Column(String(255), nullable=False)
+    body       = Column(Text, nullable=False)
+    type       = Column(String(32), nullable=False)   # run_complete | run_failed | health_alert
+    is_read    = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

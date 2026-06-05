@@ -95,11 +95,22 @@ class OpenAIProvider(BaseLLMProvider):
                      hash=request.question_hash[:8],
                      alternatives=len(request.alternatives))
 
+        if request.image_b64:
+            user_content: str | list = [
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {
+                    "url": f"data:image/png;base64,{request.image_b64}",
+                    "detail": "low",
+                }},
+            ]
+        else:
+            user_content = user_prompt
+
         response = await self._client.chat.completions.create(
             model    = self._model,
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
+                {"role": "user",   "content": user_content},
             ],
             response_format = {"type": "json_object"},
             temperature     = 0.0,

@@ -8,7 +8,7 @@ import re
 from bs4 import BeautifulSoup, Tag
 
 from backend.automation.parsers.moodle import selectors as sel
-from backend.automation.parsers.moodle.question_types import multichoice
+from backend.automation.parsers.moodle.question_types import multichoice, truefalse
 from backend.core.logging import get_logger
 from backend.schemas.quiz import ParsedQuiz, QuizMeta, QuestionType
 
@@ -66,16 +66,24 @@ def parse_attempt_page(
 
         if "multichoice" in q_type_class:
             q = multichoice.parse(container, slot=slot, page=page)
-            if q:
-                questions.append(q)
-                logger.debug("parser.question_parsed",
-                             slot=slot, type="multichoice",
-                             text_preview=q.text[:60])
-                slot += 1
+        elif "truefalse" in q_type_class:
+            q = truefalse.parse(container, slot=slot, page=page)
         else:
             logger.debug("parser.question_skipped",
                          classes=q_type_class, slot=slot)
-            slot += 1  # keep slot numbering consistent
+            slot += 1
+            continue
+
+        if q:
+            # Detect image questions — flag them so the runner can capture a screenshot
+            if container.select_one("img"):
+                q = q.model_copy(update={"has_image": True})
+            questions.append(q)
+            logger.debug("parser.question_parsed",
+                         slot=slot, type=q.type,
+                         has_image=q.has_image,
+                         text_preview=q.text[:60])
+        slot += 1
 
     # Determine next page
     next_page_el = soup.select_one(sel.HIDDEN_NEXT_PAGE)

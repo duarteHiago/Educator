@@ -18,20 +18,22 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def get_browser_context(
     restore_session: bool = True,
+    session_dir: Path | None = None,
 ) -> AsyncGenerator[tuple[BrowserContext, Browser, Playwright], None]:
     """
     Yields (context, browser, playwright).
     If restore_session=True and session file exists, restores cookies/storage.
     Always saves session state on exit.
+    session_dir: per-user directory; if None uses settings.session_file_path.
     """
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
-            headless=settings.browser_headless,
-            slow_mo=settings.browser_slow_mo,
-            args=["--disable-blink-features=AutomationControlled"],
+            headless=True,   # sempre headless no cloud; ignorado no .exe via settings
+            slow_mo=0,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
 
-        session_file = settings.session_file_path
+        session_file = (session_dir / "session.json") if session_dir else settings.session_file_path
         storage_state = str(session_file) if (restore_session and session_file.exists()) else None
 
         if storage_state:

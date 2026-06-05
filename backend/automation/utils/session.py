@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from playwright.async_api import Page
 
 from backend.core.config import settings
@@ -9,12 +11,18 @@ logger = get_logger(__name__)
 _AUTH_CHECK_URL = settings.portal_url
 
 
-async def is_session_valid(page: Page, home_url: str = _AUTH_CHECK_URL) -> bool:
+async def is_session_valid(
+    page: Page,
+    home_url: str = _AUTH_CHECK_URL,
+    session_file: Path | None = None,
+) -> bool:
     """
     Navega para home_url e verifica se a sessão ainda está ativa.
     Heurística: se o servidor redirecionar para login.unic.br, sessão expirou.
+    session_file: path explícito da sessão; se None usa settings.session_file_path.
     """
-    if not settings.session_file_path.exists():
+    resolved = session_file if session_file is not None else settings.session_file_path
+    if not resolved.exists():
         logger.info("session.no_file")
         return False
 
@@ -31,8 +39,8 @@ async def is_session_valid(page: Page, home_url: str = _AUTH_CHECK_URL) -> bool:
     return True
 
 
-async def invalidate_session() -> None:
-    session_file = settings.session_file_path
-    if session_file.exists():
-        session_file.unlink()
-        logger.info("session.invalidated", file=str(session_file))
+async def invalidate_session(session_file: Path | None = None) -> None:
+    resolved = session_file if session_file is not None else settings.session_file_path
+    if resolved.exists():
+        resolved.unlink()
+        logger.info("session.invalidated", file=str(resolved))

@@ -16,6 +16,25 @@ from pathlib import Path
 from backend.automation.profiles.course_profiles import CourseProfile, get_profile, assert_submission_allowed
 
 
+@dataclass
+class UserRunContext:
+    """Credenciais e paths isolados por usuário para execução cloud."""
+    user_id:      str
+    cpf:          str
+    ava_password: str
+    proxy_token:  str
+    proxy_url:    str
+    session_dir:  Path = field(default_factory=lambda: Path(f"/tmp/educator/sessions/default"))
+
+    def __post_init__(self) -> None:
+        self.session_dir = Path(f"/tmp/educator/sessions/{self.user_id}")
+        self.session_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def session_file(self) -> Path:
+        return self.session_dir / "session.json"
+
+
 class ExecutionMode(str, Enum):
     DRY_RUN     = "DRY_RUN"
     REVIEW_MODE = "REVIEW_MODE"

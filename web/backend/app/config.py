@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     litellm_master_key: str
     allowed_origin: str = "https://educator.yaatoro.com"
     access_token_expire_minutes: int = 60
+    redis_url: str = "redis://redis:6379/0"
+    resend_api_key: str = ""          # empty = email notifications disabled
+    resend_from_email: str = "educator@educator.yaatoro.com"
+    admin_email: str = ""             # receives health check alerts
 
     model_config = {"env_file": ".env"}
 

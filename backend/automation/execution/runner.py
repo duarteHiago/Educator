@@ -9,6 +9,7 @@ preenchemos cada página ANTES de clicar Next, então nunca precisamos
 voltar atrás.
 """
 import asyncio
+import base64
 import re
 
 from playwright.async_api import Page
@@ -204,6 +205,20 @@ async def run_quiz(
                     page=page_num, questions=len(qs), url=page.url[:80])
 
         if qs:
+            # Enrich image questions with screenshots before calling LLM
+            enriched_qs = []
+            for q in qs:
+                if q.has_image:
+                    try:
+                        el = page.locator(f"#{q.question_id}").first
+                        if await el.count() > 0:
+                            img_bytes = await el.screenshot()
+                            q = q.model_copy(update={"image_b64": base64.b64encode(img_bytes).decode()})
+                    except Exception:
+                        pass
+                enriched_qs.append(q)
+            qs = enriched_qs
+
             all_questions.extend(qs)
             slot_offset = len(all_questions)
 

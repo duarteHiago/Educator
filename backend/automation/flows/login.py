@@ -11,7 +11,10 @@ Fluxo completo:
   7. Redirect de volta para alunodigital.unic.br/krotonpda?code=...
   8. ServiceNow troca o code por sessão → cookies estabelecidos
 """
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
 
 from playwright.async_api import BrowserContext, Page
 
@@ -20,6 +23,9 @@ from backend.automation.utils.screenshot import on_error_screenshot
 from backend.automation.utils.session import is_session_valid, invalidate_session
 from backend.core.config import settings
 from backend.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from backend.automation.execution.modes import UserRunContext
 
 logger = get_logger(__name__)
 
@@ -36,7 +42,10 @@ _AVA_BASE          = "https://www.avaeduc.com.br"
 
 @async_retry(max_attempts=3, delay_seconds=3.0)
 @on_error_screenshot(label="login")
-async def do_login(page: Page) -> None:
+async def do_login(page: Page, user_ctx: UserRunContext | None = None) -> None:
+    cpf      = user_ctx.cpf          if user_ctx else settings.portal_username
+    password = user_ctx.ava_password if user_ctx else settings.portal_password
+
     logger.info("login.start", portal=settings.portal_url)
     await page.goto(settings.portal_url)
     await page.wait_for_load_state("networkidle")
@@ -52,7 +61,7 @@ async def do_login(page: Page) -> None:
 
     # ── Passo 1: CPF ──────────────────────────────────────────────────────
     await page.wait_for_selector(_CPF_SELECTOR, state="visible")
-    await page.fill(_CPF_SELECTOR, settings.portal_username)
+    await page.fill(_CPF_SELECTOR, cpf)
     await asyncio.sleep(0.3)
 
     logger.info("login.step1_submit")
@@ -63,7 +72,7 @@ async def do_login(page: Page) -> None:
     logger.info("login.password_field_visible")
 
     # ── Passo 2: Senha ────────────────────────────────────────────────────
-    await page.fill(_PASS_SELECTOR, settings.portal_password)
+    await page.fill(_PASS_SELECTOR, password)
     await asyncio.sleep(0.4)
 
     logger.info("login.step2_submit")
@@ -141,16 +150,22 @@ async def _establish_ava_session(page: Page, context: BrowserContext) -> Page:
     return page
 
 
-async def ensure_authenticated(context: BrowserContext) -> Page:
+async def ensure_authenticated(
+    context: BrowserContext,
+    user_ctx: UserRunContext | None = None,
+) -> Page:
     """
     Retorna Page autenticada no AVA. Reutiliza sessão do portal se válida,
     mas sempre reestabelece a sessão do AVA via SSO antes de retornar.
+    user_ctx: quando fornecido, usa credenciais e session_file do usuário.
     """
     page = await context.new_page()
 
-    if not await is_session_valid(page, settings.portal_url):
+    session_file = user_ctx.session_file if user_ctx else None
+
+    if not await is_session_valid(page, settings.portal_url, session_file=session_file):
         logger.info("auth.session_invalid_relogging")
-        await invalidate_session()
-        await do_login(page)
+        await invalidate_session(session_file=session_file)
+        await do_login(page, user_ctx=user_ctx)
 
     return await _establish_ava_session(page, context)
