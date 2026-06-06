@@ -128,6 +128,70 @@ async def discover_enrolled_courses(ava_page: Page) -> dict[int, str]:
     return courses
 
 
+# ── Grade report ─────────────────────────────────────────────────────────────
+
+async def _get_course_grades(page: Page, course_id: int) -> dict[int, str]:
+    """
+    Visita /grade/report/user/index.php?id=COURSE_ID e extrai um mapa
+    {cmid: grade_string} para todos os itens que têm nota registrada.
+    Retorna dict vazio se a página não carregar ou não tiver itens.
+    """
+    url = f"{AVA_BASE}/grade/report/user/index.php?id={course_id}"
+    try:
+        await page.goto(url)
+        await page.wait_for_load_state("networkidle")
+        await asyncio.sleep(0.8)
+
+        grades: dict = await page.evaluate(r"""() => {
+            const result = {};
+            // Percorre cada linha da tabela de notas
+            document.querySelectorAll('tr').forEach(row => {
+                // Busca link para /mod/quiz/view.php?id=CMID na linha
+                const link = row.querySelector('a[href*="/mod/quiz/view.php?id="]');
+                if (!link) return;
+                const m = link.href.match(/\/mod\/quiz\/view\.php\?id=(\d+)/);
+                if (!m) return;
+                const cmid = parseInt(m[1]);
+
+                // Busca célula de nota (exclui "-" e vazios)
+                let grade = null;
+                row.querySelectorAll('td').forEach(td => {
+                    const cls = td.className || '';
+                    if (cls.includes('grade') || cls.includes('nota')) {
+                        const t = td.innerText.trim();
+                        if (t && t !== '-' && t !== ' ' && !/^0[,.]00/.test(t)) {
+                            grade = t.slice(0, 60);
+                        }
+                    }
+                });
+
+                // Fallback: segunda ou terceira coluna da linha
+                if (!grade) {
+                    const cells = row.querySelectorAll('td');
+                    for (let i = 1; i < cells.length; i++) {
+                        const t = cells[i].innerText.trim();
+                        if (t && t !== '-' && /[\d,.]/.test(t) && t.length < 20) {
+                            grade = t;
+                            break;
+                        }
+                    }
+                }
+
+                if (grade) result[cmid] = grade;
+            });
+            return result;
+        }""")
+
+        logger.info("live_discovery.grades_fetched",
+                    course_id=course_id, graded=len(grades))
+        return {int(k): v for k, v in grades.items()}
+
+    except Exception as exc:
+        logger.warning("live_discovery.grades_fetch_failed",
+                       course_id=course_id, error=str(exc)[:80])
+        return {}
+
+
 # ── Activity extraction ───────────────────────────────────────────────────────
 
 async def _extract_mod_links(page: Page) -> list[dict]:
@@ -207,6 +271,9 @@ async def discover_activities(
     url = f"{AVA_BASE}/course/view.php?id={course_id}"
     logger.info("live_discovery.course_start", course=course_name, url=url)
 
+    # Busca notas registradas — indica quais quizzes já foram submetidos
+    grade_map: dict[int, str] = await _get_course_grades(page, course_id)
+
     await page.goto(url)
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(1.5)
@@ -221,13 +288,19 @@ async def discover_activities(
     def _add(
         mod: str, cmid: int, text: str, href: str,
         source: str = "direct",
-        completed: bool = False,
-        grade_string: str | None = None,
+        css_completed: bool = False,
+        css_grade: str | None = None,
     ) -> None:
         if cmid in seen_cmids or cmid <= 1:
             return
         seen_cmids.add(cmid)
         cat = _classify(mod)
+
+        # Grade report tem precedência sobre detection por CSS
+        grade_from_report = grade_map.get(cmid)
+        completed  = bool(grade_from_report) or css_completed
+        grade_str  = grade_from_report or css_grade
+
         activities.append({
             "cmid":         cmid,
             "course_id":    course_id,
@@ -238,13 +311,13 @@ async def discover_activities(
             "url":          href,
             "source":       source,
             "completed":    completed,
-            "grade_string": grade_string,
+            "grade_string": grade_str,
         })
 
     for link in direct_links:
         _add(link["mod"], link["cmid"], link["text"], link["href"],
-             completed=link.get("completed", False),
-             grade_string=link.get("grade_string"))
+             css_completed=link.get("completed", False),
+             css_grade=link.get("grade_string"))
 
     if unique_topics:
         if on_progress:
@@ -257,8 +330,8 @@ async def discover_activities(
             for link in await _extract_mod_links(page):
                 _add(link["mod"], link["cmid"], link["text"], link["href"],
                      source=f"topic_{topic_id}",
-                     completed=link.get("completed", False),
-                     grade_string=link.get("grade_string"))
+                     css_completed=link.get("completed", False),
+                     css_grade=link.get("grade_string"))
 
     completed_count = sum(1 for a in activities if a.get("completed"))
     logger.info("live_discovery.course_done",
