@@ -22,7 +22,7 @@ def _init_enc():
     init_encryption(settings.encryption_key)
 
 
-async def _run_discovery(cpf: str, ava_password: str, proxy_url: str, proxy_token: str) -> list[dict]:
+async def _run_discovery(user_id: str, cpf: str, ava_password: str, proxy_url: str, proxy_token: str) -> list[dict]:
     from backend.automation.execution.modes import UserRunContext
     from backend.automation.flows.login import ensure_authenticated
     from backend.automation.utils.browser import get_browser_context
@@ -59,6 +59,7 @@ def discover_activities_task(self, user_id: str) -> dict:
 
     try:
         activities = asyncio.run(_run_discovery(
+            user_id=user_id,
             cpf=cpf,
             ava_password=password,
             proxy_url=settings.litellm_url,
