@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     perf_history_file: Path = Path("./logs/performance_history.json")
     perf_active_config_file: Path = Path("./logs/active_model_config.json")
 
+    # Portal de distribuição — resultados são reportados após cada execução
+    portal_api_url: str = "https://educator.yaatoro.com"
+
     # Logs
     log_level: str = "DEBUG"
     log_file: Path = Path("./logs/educator.jsonl")

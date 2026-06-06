@@ -78,6 +78,10 @@ async def _handle_quiz(
                 "attempt_id":    result.attempt_id,
             }
 
+        # Reporta para o portal (silencioso se não configurado)
+        from backend.automation.portal_reporter import report_run
+        await report_run(ctx, result)
+
         return ActivityResult(
             cmid=activity.cmid,
             course_id=activity.course_id,

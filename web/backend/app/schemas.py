@@ -104,6 +104,24 @@ class CourseOut(BaseModel):
     activities: list[ActivityOut]
 
 
+# ── Report do .exe ────────────────────────────────────────────────────────────
+
+class RunReport(BaseModel):
+    token: str                          # LiteLLM virtual key — usado para identificar o usuário
+    execution_id: str
+    cmid: int
+    course_id: int
+    mode: str
+    status: str                         # success | failed | dry_run
+    score_percent: float | None = None
+    grade_string: str | None = None
+    questions_total: int = 0
+    questions_answered: int = 0
+    error_message: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+
+
 # ── Execuções ─────────────────────────────────────────────────────────────────
 
 class RunOut(BaseModel):
