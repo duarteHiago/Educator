@@ -28,9 +28,17 @@ async def get_browser_context(
     """
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
-            headless=True,   # sempre headless no cloud; ignorado no .exe via settings
-            slow_mo=0,
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            headless=True,
+            slow_mo=50,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-infobars",
+                "--disable-extensions",
+                "--window-size=1280,800",
+            ],
         )
 
         session_file = (session_dir / "session.json") if session_dir else settings.session_file_path
@@ -50,7 +58,19 @@ async def get_browser_context(
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             locale="pt-BR",
+            java_script_enabled=True,
+            extra_http_headers={
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
         )
+
+        # Mascara navigator.webdriver e outros sinais de automação
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
+            window.chrome = { runtime: {} };
+        """)
 
         context.set_default_timeout(settings.browser_timeout)
         context.set_default_navigation_timeout(settings.browser_timeout)
