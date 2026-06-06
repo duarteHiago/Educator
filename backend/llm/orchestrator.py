@@ -68,7 +68,18 @@ class LLMOrchestrator:
             return build_provider(fp, fm)
         return build_provider(provider, model)  # same if already at top
 
+    def set_course(self, course_id: int, course_name: str) -> None:
+        """Update course context before each quiz; resets cached persona."""
+        self._course_id   = course_id
+        self._course_name = course_name
+        self._persona     = ""
+
     async def answer_question(self, question: QuizQuestion) -> LLMResponse:
+        # Lazy persona resolution — happens once per quiz on first question call
+        if self._course_name and not self._persona:
+            from backend.llm import persona_builder
+            self._persona = await persona_builder.get_persona(self._course_id, self._course_name)
+
         # 1. Knowledge base lookup — skip LLM entirely if verified answer exists
         kb_answer = await kb.lookup(question.question_hash, min_confidence=0.9)
         if kb_answer:
@@ -129,9 +140,6 @@ class LLMOrchestrator:
 
     async def answer_quiz(self, quiz: ParsedQuiz) -> list[LLMResponse]:
         """Process all questions in a parsed quiz. Returns responses in slot order."""
-        from backend.llm import persona_builder
-        self._persona = await persona_builder.get_persona(self._course_id, self._course_name)
-
         responses: list[LLMResponse] = []
 
         for question in quiz.questions:

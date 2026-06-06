@@ -161,6 +161,20 @@ class RunDisplay:
 
         console.print(r)
 
+    def show_activity_skipped(self, activity: "ActivityInfo", score_pct: float | None = None) -> None:
+        """Shows a quick 'already done' line without running the quiz."""
+        state = self._courses.get(activity.course_id)
+        if state:
+            state.done += 1
+        self._done += 1
+
+        r = Text()
+        r.append("         ✓ ", style="bold green")
+        r.append("já concluído", style="green")
+        if score_pct is not None:
+            r.append(f"  ({score_pct:.0f}%)", style="dim green")
+        console.print(r)
+
     def show_model_evolution(self, action: "EvolutionAction") -> None:
         old = action.old_config
         new = action.new_config
@@ -198,6 +212,7 @@ class RunDisplay:
         successful: int,
         failed: int,
         avg_score: float | None,
+        skipped: int = 0,
     ) -> None:
         elapsed = time.monotonic() - self._started_at
         minutes, seconds = divmod(int(elapsed), 60)
@@ -206,7 +221,10 @@ class RunDisplay:
         t.append("\n  Execução finalizada\n\n", style="bold white")
         t.append(f"  Quizzes: ", style="dim")
         t.append(f"{successful} ok", style="green")
-        t.append(f"  /  {failed} falhas\n", style="dim")
+        t.append(f"  /  {failed} falhas", style="dim")
+        if skipped:
+            t.append(f"  /  {skipped} pulados", style="dim")
+        t.append("\n")
         if avg_score is not None:
             color = _score_color(avg_score)
             t.append(f"  Acerto médio: ", style="dim")

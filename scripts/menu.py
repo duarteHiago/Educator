@@ -231,6 +231,7 @@ def select_mode() -> ExecutionMode | None:
 async def execute(candidates: list[ActivityInfo], mode: ExecutionMode, force: bool = False) -> None:
     engine  = EvolutionEngine()
     orc     = LLMOrchestrator(engine=engine)
+    tracker = CompletionTracker()
     display = RunDisplay(
         total_quizzes=len(candidates),
         active_config=engine.active_config,
@@ -242,13 +243,24 @@ async def execute(candidates: list[ActivityInfo], mode: ExecutionMode, force: bo
     evaluator   = QuizEvaluator()
     reporter    = ExecutionReporter()
     all_metrics: list[QuizMetrics] = []
-    successful = failed = 0
+    successful = failed = skipped = 0
 
     async with get_browser_context(restore_session=True) as (context, browser, pw):
         page = await ensure_authenticated(context)
 
         for idx, activity in enumerate(candidates):
             display.show_activity_start(idx + 1, activity)
+
+            # Pula atividades já concluídas com sucesso em modo AUTO
+            if mode == ExecutionMode.AUTO_MODE and tracker.is_done(activity.cmid):
+                info = tracker.get(activity.cmid)
+                display.show_activity_skipped(activity, info.score_percent if info else None)
+                successful += 1
+                skipped += 1
+                continue
+
+            # Atualiza contexto de curso no orquestrador (persona por matéria)
+            orc.set_course(activity.course_id, activity.course_name)
 
             ctx = ExecutionContext(
                 course_id    = activity.course_id,
@@ -305,7 +317,7 @@ async def execute(candidates: list[ActivityInfo], mode: ExecutionMode, force: bo
         report_path = Path("logs/reports") / f"batch_{int(time.time())}.json"
         reporter.save_report(batch, report_path)
 
-    display.show_final_summary(successful, failed, avg_score)
+    display.show_final_summary(successful, failed, avg_score, skipped=skipped)
 
 
 # ── Live Discovery ────────────────────────────────────────────────────────────

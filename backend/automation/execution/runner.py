@@ -32,6 +32,40 @@ from backend.schemas.quiz import (
 
 logger = get_logger(__name__)
 
+_LLM_MAX_ATTEMPTS = 3
+
+
+async def _answer_with_retry(orc: LLMOrchestrator, question) -> LLMResponse:
+    """Wraps answer_question with up to _LLM_MAX_ATTEMPTS retries on failure."""
+    last_exc: Exception | None = None
+    for attempt in range(1, _LLM_MAX_ATTEMPTS + 1):
+        try:
+            return await orc.answer_question(question)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _LLM_MAX_ATTEMPTS:
+                logger.warning(
+                    "runner.llm_retry",
+                    slot=question.slot,
+                    attempt=attempt,
+                    error=str(exc)[:120],
+                )
+                await asyncio.sleep(2.0 * attempt)
+
+    logger.error(
+        "runner.llm_all_retries_failed",
+        slot=question.slot,
+        error=str(last_exc)[:120],
+    )
+    return LLMResponse(
+        question_hash=question.question_hash,
+        answer="A",
+        confidence=0.0,
+        reasoning=f"Fallback após {_LLM_MAX_ATTEMPTS} tentativas: {last_exc}",
+        model="fallback",
+        provider="fallback",
+    )
+
 
 def _quiz_view_url(cmid: int) -> str:
     return f"{AVA_BASE}/mod/quiz/view.php?id={cmid}"
@@ -222,10 +256,10 @@ async def run_quiz(
             all_questions.extend(qs)
             slot_offset = len(all_questions)
 
-            # LLM para as questões desta página
+            # LLM para as questões desta página (com retry em caso de falha)
             page_responses = []
             for q in qs:
-                resp = await orc.answer_question(q)
+                resp = await _answer_with_retry(orc, q)
                 page_responses.append(resp)
                 all_responses.append(resp)
                 artifact.append_llm_response(resp)
