@@ -66,7 +66,17 @@ def discover_activities_task(self, user_id: str) -> dict:
         ))
     except Exception as exc:
         logger.error("discovery.failed", extra={"user_id": user_id, "error": str(exc)})
-        raise self.retry(exc=exc)
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            with get_session() as db:
+                db.add(Notification(
+                    user_id=uuid.UUID(user_id),
+                    title="Erro no mapeamento",
+                    body=f"Não foi possível mapear suas atividades após 3 tentativas. Erro: {str(exc)[:200]}",
+                    type="run_failed",
+                ))
+            raise
 
     with get_session() as db:
         # Replace all activities for this user with fresh discovery

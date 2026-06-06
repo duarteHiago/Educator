@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/errors";
@@ -18,14 +18,18 @@ interface Course {
   activities: Activity[];
 }
 
+type DiscoverState = "idle" | "running" | "success" | "failed";
+
 export default function ActivitiesPage() {
   const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [discovering, setDiscovering] = useState(false);
+  const [discoverState, setDiscoverState] = useState<DiscoverState>("idle");
+  const [discoverMsg, setDiscoverMsg] = useState("");
   const [runningCmids, setRunningCmids] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function loadCourses() {
     try {
@@ -40,17 +44,56 @@ export default function ActivitiesPage() {
 
   useEffect(() => { loadCourses(); }, []);
 
+  // Cleanup polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
+
+  async function pollJobStatus(taskId: string, attempt = 0) {
+    const MAX_ATTEMPTS = 72; // 6 min (5s * 72)
+    if (attempt >= MAX_ATTEMPTS) {
+      setDiscoverState("failed");
+      setDiscoverMsg("Tempo esgotado. O mapeamento demorou mais que o esperado.");
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/api/jobs/${taskId}`);
+      const data = await res.json();
+
+      if (data.status === "SUCCESS") {
+        setDiscoverState("success");
+        setDiscoverMsg(`Mapeamento concluído! ${data.result?.total ?? ""} atividades encontradas.`);
+        await loadCourses();
+        return;
+      }
+
+      if (data.status === "FAILURE") {
+        setDiscoverState("failed");
+        setDiscoverMsg("Erro no mapeamento. Verifique suas credenciais AVA e tente novamente.");
+        return;
+      }
+
+      // PENDING ou STARTED — continua polling
+      pollRef.current = setTimeout(() => pollJobStatus(taskId, attempt + 1), 5000);
+    } catch {
+      pollRef.current = setTimeout(() => pollJobStatus(taskId, attempt + 1), 5000);
+    }
+  }
+
   async function handleDiscover() {
-    setDiscovering(true);
+    if (pollRef.current) clearTimeout(pollRef.current);
+    setDiscoverState("running");
+    setDiscoverMsg("Iniciando mapeamento...");
     setError("");
     setSuccess("");
+
     try {
-      await apiFetch("/api/jobs/discover", { method: "POST" });
-      setSuccess("Mapeamento iniciado. Aguarde alguns minutos e recarregue a página.");
+      const res = await apiFetch("/api/jobs/discover", { method: "POST" });
+      const { task_id } = await res.json();
+      setDiscoverMsg("Mapeando seus cursos no AVA Educ. Isso leva alguns minutos...");
+      pollJobStatus(task_id);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Erro ao iniciar mapeamento.");
-    } finally {
-      setDiscovering(false);
+      setDiscoverState("failed");
+      setDiscoverMsg(e instanceof ApiError ? e.message : "Erro ao iniciar mapeamento.");
     }
   }
 
@@ -63,13 +106,29 @@ export default function ActivitiesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cmid, course_id: courseId, mode: "AUTO_MODE" }),
       });
-      setSuccess(`Quiz cmid=${cmid} enviado para execução.`);
+      setSuccess(`Quiz iniciado. Acompanhe em Histórico.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Erro ao iniciar execução.");
     } finally {
       setRunningCmids(prev => { const s = new Set(prev); s.delete(cmid); return s; });
     }
   }
+
+  const discoverBanner = discoverState !== "idle" && (
+    <div className={`mb-4 text-sm rounded px-4 py-3 border flex items-center gap-3 ${
+      discoverState === "running"  ? "text-[#00bfff] bg-[#00bfff08] border-[#00bfff33]" :
+      discoverState === "success"  ? "text-[#00ff99] bg-[#00ff9910] border-green/20" :
+                                     "text-red-400 bg-red-400/10 border-red-400/20"
+    }`}>
+      {discoverState === "running" && (
+        <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+      )}
+      {discoverMsg}
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -87,11 +146,16 @@ export default function ActivitiesPage() {
             <h1 className="text-2xl font-bold text-white mb-1">Atividades</h1>
             <p className="text-[#555] text-sm">Cursos e quizzes descobertos na sua conta AVA.</p>
           </div>
-          <button onClick={handleDiscover} className="btn-primary text-sm" disabled={discovering}>
-            {discovering ? "Mapeando..." : "Mapear Agora"}
+          <button
+            onClick={handleDiscover}
+            className="btn-primary text-sm"
+            disabled={discoverState === "running"}
+          >
+            {discoverState === "running" ? "Mapeando..." : "Mapear Agora"}
           </button>
         </div>
 
+        {discoverBanner}
         {error && <div className="mb-4 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded px-3 py-2">{error}</div>}
         {success && <div className="mb-4 text-[#00ff99] text-sm bg-[#00ff9910] border border-green/20 rounded px-3 py-2">{success}</div>}
 
@@ -100,8 +164,12 @@ export default function ActivitiesPage() {
         ) : courses.length === 0 ? (
           <div className="card p-8 text-center">
             <p className="text-[#555] text-sm mb-4">Nenhuma atividade mapeada ainda.</p>
-            <button onClick={handleDiscover} className="btn-primary" disabled={discovering}>
-              {discovering ? "Mapeando..." : "Iniciar Mapeamento"}
+            <button
+              onClick={handleDiscover}
+              className="btn-primary"
+              disabled={discoverState === "running"}
+            >
+              {discoverState === "running" ? "Mapeando..." : "Iniciar Mapeamento"}
             </button>
           </div>
         ) : (
