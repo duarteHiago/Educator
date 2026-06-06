@@ -62,7 +62,7 @@ async def _handle_quiz(
     from backend.llm.orchestrator import LLMOrchestrator
 
     started = time.monotonic()
-    orc     = LLMOrchestrator()
+    orc     = LLMOrchestrator(course_id=activity.course_id, course_name=activity.course_name)
 
     try:
         result  = await run_quiz(page, ctx, orchestrator=orc)

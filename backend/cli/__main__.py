@@ -183,6 +183,7 @@ def _ensure_logs_dir() -> None:
     (logs / "cache").mkdir(exist_ok=True)
     (logs / "quizzes").mkdir(exist_ok=True)
     (logs / "reports").mkdir(exist_ok=True)
+    (logs / "personas").mkdir(exist_ok=True)
 
     map_file = logs / "activity_map.json"
     if not map_file.exists():

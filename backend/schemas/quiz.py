@@ -81,6 +81,7 @@ class LLMRequest(BaseModel):
     provider:       str = "openai"
     prompt_version: str = "v1"
     image_b64:      str | None = None  # filled when question has an image
+    persona:        str = ""           # subject-specific expert persona (from PersonaBuilder)
 
 
 class LLMResponse(BaseModel):

@@ -28,7 +28,12 @@ _CONFIDENCE_THRESHOLD = settings.llm_confidence_threshold
 
 
 class LLMOrchestrator:
-    def __init__(self, engine: EvolutionEngine | None = None) -> None:
+    def __init__(
+        self,
+        engine: EvolutionEngine | None = None,
+        course_id: int = 0,
+        course_name: str = "",
+    ) -> None:
         self._engine = engine or EvolutionEngine()
         cfg = self._engine.active_config
 
@@ -38,12 +43,17 @@ class LLMOrchestrator:
         # Confidence fallback: one step up in the chain from current
         self._fallback: BaseLLMProvider = self._build_fallback(cfg.provider, cfg.model)
 
+        self._course_id   = course_id
+        self._course_name = course_name
+        self._persona     = ""  # resolved lazily on first answer_quiz call
+
         logger.info(
             "llm.orchestrator_ready",
             provider=cfg.provider,
             model=cfg.model,
             prompt_version=cfg.prompt_version,
             fallback=self._fallback.model_name,
+            course=course_name[:40] if course_name else "",
         )
 
     def _build_fallback(self, provider: str, model: str) -> BaseLLMProvider:
@@ -93,6 +103,7 @@ class LLMOrchestrator:
             provider       = primary.provider_name,
             prompt_version = self._prompt_version,
             image_b64      = question.image_b64,
+            persona        = self._persona,
         )
 
         resp = await primary.complete(req)
@@ -118,6 +129,9 @@ class LLMOrchestrator:
 
     async def answer_quiz(self, quiz: ParsedQuiz) -> list[LLMResponse]:
         """Process all questions in a parsed quiz. Returns responses in slot order."""
+        from backend.llm import persona_builder
+        self._persona = await persona_builder.get_persona(self._course_id, self._course_name)
+
         responses: list[LLMResponse] = []
 
         for question in quiz.questions:

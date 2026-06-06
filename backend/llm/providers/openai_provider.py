@@ -85,7 +85,7 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         version = request.prompt_version
-        system_prompt = prompts.get_system_prompt(version)
+        system_prompt = prompts.get_system_prompt(version, persona=request.persona)
         user_prompt = prompts.build_user_prompt_from_request(request, version)
         t0 = time.monotonic()
 

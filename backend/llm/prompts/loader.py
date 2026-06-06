@@ -39,8 +39,21 @@ def _load_raw(version: str) -> tuple[str, str]:
     return system_part, user_part
 
 
-def get_system_prompt(version: str = "v1") -> str:
-    return _load_raw(version)[0]
+def get_system_prompt(version: str = "v1", persona: str = "") -> str:
+    base = _load_raw(version)[0]
+    if not persona:
+        return base
+    # Replace the generic "Você é..." intro with the subject-specific persona
+    lines = base.split("\n")
+    new_lines: list[str] = []
+    replaced = False
+    for line in lines:
+        if not replaced and line.startswith("Você é"):
+            new_lines.append(persona)
+            replaced = True
+        else:
+            new_lines.append(line)
+    return "\n".join(new_lines)
 
 
 def build_user_prompt(version: str, question_text: str, alternatives: list) -> str:
