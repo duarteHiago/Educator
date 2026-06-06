@@ -12,12 +12,6 @@ services:
     networks:
       - internal
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    networks:
-      - internal
-
   backend:
     build: ./backend
     restart: unless-stopped
@@ -29,65 +23,11 @@ services:
       LITELLM_URL: http://${LITELLM_CONTAINER}:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN}
-      REDIS_URL: redis://redis:6379/0
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-educator@educator.yaatoro.com}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
     depends_on:
       - postgres
-      - redis
     networks:
       - internal
       - litellm_network
-
-  worker:
-    build:
-      context: ..
-      dockerfile: web/worker/Dockerfile
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql+asyncpg://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      ADMIN_SECRET: ${ADMIN_SECRET}
-      LITELLM_URL: http://${LITELLM_CONTAINER}:4000
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-educator@educator.yaatoro.com}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-    depends_on:
-      - redis
-      - postgres
-    command: celery -A app.celery_app worker --concurrency=3 --loglevel=info
-    networks:
-      - internal
-      - litellm_network
-
-  beat:
-    build:
-      context: ..
-      dockerfile: web/worker/Dockerfile
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql+asyncpg://educator:${POSTGRES_PASSWORD}@postgres:5432/educator
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      ADMIN_SECRET: ${ADMIN_SECRET}
-      LITELLM_URL: http://${LITELLM_CONTAINER}:4000
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-educator@educator.yaatoro.com}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-    depends_on:
-      - redis
-      - postgres
-    command: celery -A app.celery_app beat --loglevel=info
-    volumes:
-      - celerybeat_schedule:/app/beat
-    networks:
-      - internal
 
   frontend:
     build: ./frontend
@@ -117,7 +57,6 @@ services:
 
 volumes:
   postgres_data:
-  celerybeat_schedule:
 
 networks:
   internal:

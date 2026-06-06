@@ -8,7 +8,7 @@ import httpx
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import QuizExecution, Token, User, UserActivity
+from app.models import QuizExecution, Token, User
 from app.schemas import DashboardStats, RunOut
 from app.security import decrypt_token
 
@@ -16,7 +16,6 @@ router = APIRouter(tags=["dashboard"])
 
 
 async def _get_litellm_spend(key_alias: str, litellm_url: str, master_key: str) -> tuple[float, float]:
-    """Returns (used_usd, limit_usd). Gracefully returns (0, 0) on error."""
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(
@@ -42,7 +41,6 @@ async def get_stats(
 ) -> DashboardStats:
     settings = get_settings()
 
-    # Run counts
     total_res = await db.execute(
         select(func.count()).where(QuizExecution.user_id == user.id)
     )
@@ -65,20 +63,6 @@ async def get_stats(
     )
     avg_score = avg_res.scalar()
 
-    # Activity counts
-    courses_res = await db.execute(
-        select(func.count(func.distinct(UserActivity.course_id))).where(
-            UserActivity.user_id == user.id
-        )
-    )
-    courses_discovered = courses_res.scalar() or 0
-
-    acts_res = await db.execute(
-        select(func.count()).where(UserActivity.user_id == user.id)
-    )
-    activities_total = acts_res.scalar() or 0
-
-    # LiteLLM spend
     credit_used, credit_limit = 0.0, 3.0
     token_res = await db.execute(
         select(Token).where(Token.user_id == user.id, Token.is_active.is_(True))
@@ -89,7 +73,6 @@ async def get_stats(
             token_row.key_alias, settings.litellm_url, settings.litellm_master_key
         )
 
-    # Recent runs
     recent_res = await db.execute(
         select(QuizExecution)
         .where(QuizExecution.user_id == user.id)
@@ -102,8 +85,6 @@ async def get_stats(
         total_runs=total_runs,
         success_rate=round(success_rate, 3),
         avg_score_percent=round(avg_score, 1) if avg_score is not None else None,
-        courses_discovered=courses_discovered,
-        activities_total=activities_total,
         credit_used_usd=round(credit_used, 4),
         credit_limit_usd=round(credit_limit, 2),
         recent_runs=recent_runs,

@@ -104,10 +104,7 @@ export default function Dashboard() {
       <nav className="border-b border-[#1e1e1e] px-6 py-4 flex items-center justify-between">
         <Link href="/" className="font-mono font-bold text-white tracking-widest">EDUCATOR</Link>
         <div className="flex items-center gap-2">
-          <Link href="/activities" className="btn-ghost text-sm py-2 px-3">Atividades</Link>
           <Link href="/runs" className="btn-ghost text-sm py-2 px-3">Histórico</Link>
-          <Link href="/schedule" className="btn-ghost text-sm py-2 px-3">Agendamentos</Link>
-          <Link href="/credentials" className="btn-ghost text-sm py-2 px-3">Credenciais</Link>
           <button onClick={logout} className="btn-ghost text-sm py-2 px-3">Sair</button>
         </div>
       </nav>
@@ -123,7 +120,6 @@ export default function Dashboard() {
               { label: "Execuções", value: stats.total_runs },
               { label: "Sucesso", value: `${(stats.success_rate * 100).toFixed(0)}%` },
               { label: "Score médio", value: stats.avg_score_percent != null ? `${stats.avg_score_percent.toFixed(1)}%` : "—" },
-              { label: "Atividades", value: stats.activities_total },
             ].map(({ label, value }) => (
               <div key={label} className="card p-4">
                 <p className="text-xs text-[#555] mb-1 tracking-wider">{label.toUpperCase()}</p>

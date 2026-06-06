@@ -25,7 +25,7 @@ class UserOut(BaseModel):
 
 class TokenOut(BaseModel):
     key_alias: str
-    masked_key: str          # primeiros 12 + "..." + últimos 4 chars
+    masked_key: str
     hostname: str | None
     is_active: bool
     generated_at: datetime
@@ -35,7 +35,6 @@ class TokenOut(BaseModel):
 
 
 class TokenGenerated(BaseModel):
-    """Retornado apenas na geração — única vez que o full key é exibido."""
     full_key: str
     key_alias: str
     message: str = "Copie este token agora. Ele não será exibido novamente."
@@ -48,7 +47,6 @@ class BindRequest(BaseModel):
     @field_validator("hostname")
     @classmethod
     def sanitize_hostname(cls, v: str) -> str:
-        # mantém apenas chars válidos em hostnames
         allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
         return "".join(c for c in v if c in allowed)[:255]
 
@@ -63,56 +61,15 @@ class ValidateResponse(BaseModel):
     message: str
 
 
-# ── Credenciais AVA ───────────────────────────────────────────────────────────
-
-class CredentialsSave(BaseModel):
-    cpf: str = Field(min_length=11, max_length=14)   # 11 dígitos ou com pontuação
-    ava_password: str = Field(min_length=4, max_length=128)
-
-    @field_validator("cpf")
-    @classmethod
-    def normalize_cpf(cls, v: str) -> str:
-        digits = "".join(c for c in v if c.isdigit())
-        if len(digits) != 11:
-            raise ValueError("CPF deve conter 11 dígitos")
-        return digits
-
-
-class CredentialsStatus(BaseModel):
-    exists: bool
-    updated_at: datetime | None = None
-
-
-# ── Activities ─────────────────────────────────────────────────────────────────
-
-class ActivityOut(BaseModel):
-    id: UUID
-    cmid: int
-    course_id: int
-    course_name: str
-    activity_type: str
-    title: str
-    url: str | None
-    discovered_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class CourseOut(BaseModel):
-    course_id: int
-    course_name: str
-    activities: list[ActivityOut]
-
-
 # ── Report do .exe ────────────────────────────────────────────────────────────
 
 class RunReport(BaseModel):
-    token: str                          # LiteLLM virtual key — usado para identificar o usuário
+    token: str
     execution_id: str
     cmid: int
     course_id: int
     mode: str
-    status: str                         # success | failed | dry_run
+    status: str
     score_percent: float | None = None
     grade_string: str | None = None
     questions_total: int = 0
@@ -142,57 +99,15 @@ class RunOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── Jobs ──────────────────────────────────────────────────────────────────────
-
-class JobTriggerResponse(BaseModel):
-    task_id: str
-    message: str
-
-
-class JobRunRequest(BaseModel):
-    cmid: int
-    course_id: int
-    mode: str = "AUTO_MODE"
-
-
-class JobStatusResponse(BaseModel):
-    task_id: str
-    status: str   # PENDING | STARTED | SUCCESS | FAILURE | REVOKED
-    result: dict | None = None
-
-
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):
     total_runs: int
     success_rate: float
     avg_score_percent: float | None
-    courses_discovered: int
-    activities_total: int
     credit_used_usd: float
     credit_limit_usd: float
     recent_runs: list[RunOut]
-
-
-# ── Agendamentos ──────────────────────────────────────────────────────────────
-
-class ScheduleCreate(BaseModel):
-    course_id: int | None = None
-    cron_expr: str = Field(min_length=9, max_length=64)   # e.g. "0 3 * * *"
-    mode: str = "AUTO_MODE"
-
-
-class ScheduleOut(BaseModel):
-    id: UUID
-    course_id: int | None
-    cron_expr: str
-    mode: str
-    is_active: bool
-    last_run_at: datetime | None
-    next_run_at: datetime | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 # ── Notificações ──────────────────────────────────────────────────────────────
