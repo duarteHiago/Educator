@@ -29,7 +29,7 @@ async def _run_discovery(cpf: str, ava_password: str, proxy_url: str, proxy_toke
     from backend.automation.discovery.live_discovery import run_full_discovery
 
     user_ctx = UserRunContext(
-        user_id="discovery",
+        user_id=user_id,
         cpf=cpf,
         ava_password=ava_password,
         proxy_token=proxy_token,
