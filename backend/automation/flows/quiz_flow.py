@@ -25,19 +25,94 @@ AVA_BASE = "https://www.avaeduc.com.br"
 
 
 async def dismiss_overlays(page: Page) -> None:
-    """Hide cookie banners and overlays that intercept pointer events.
-    Uses display:none instead of remove() so it survives web component re-mounts."""
+    """
+    Fecha/esconde banners de cookie, modais e overlays do Moodle/AVA.
+
+    Estratégia em 3 camadas:
+      1. Clica em botões de fechar de modais visíveis (×, Fechar, Close, etc.)
+      2. Esconde backdrops e banners via CSS
+      3. Pressiona Escape como último recurso
+    """
+    # ── 1. Tenta fechar modais clicando no botão de dismiss ───────────────────
+    # Loga qualquer modal visível para diagnóstico
+    try:
+        visible_modals = await page.evaluate("""() => {
+            const found = [];
+            for (const el of document.querySelectorAll(
+                '.modal.show, [role="dialog"], [data-region="modal"]'
+            )) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) {
+                    found.push({
+                        tag: el.tagName,
+                        id: el.id || '',
+                        cls: el.className.slice(0, 80),
+                        text: el.innerText.slice(0, 120),
+                    });
+                }
+            }
+            return found;
+        }""")
+        if visible_modals:
+            logger.info("dismiss_overlays.modals_detected", count=len(visible_modals), modals=visible_modals)
+    except Exception:
+        pass
+
+    close_candidates = [
+        # Bootstrap modal close button
+        'button.close[data-dismiss="modal"]',
+        '.modal.show button.close',
+        '.modal.show [data-action="hide"]',
+        '.modal.show [data-action="cancel"]',
+        # Moodle-specific
+        '[data-region="modal"] [data-action="hide"]',
+        '[data-region="modal"] button.close',
+        # ARIA dialog — botão com texto de fechar
+        '[role="dialog"] button.close',
+        '[role="dialog"] [data-dismiss]',
+    ]
+    for selector in close_candidates:
+        try:
+            btn = page.locator(selector).first
+            if await btn.count() > 0 and await btn.is_visible(timeout=300):
+                await btn.click(timeout=2_000)
+                await asyncio.sleep(0.4)
+        except Exception:
+            pass
+
+    # Também tenta por texto visível dentro de dialogs
+    text_close_selectors = [
+        '[role="dialog"] >> text=Fechar',
+        '[role="dialog"] >> text=×',
+        '[role="dialog"] >> text=Close',
+        '.modal.show >> text=Fechar',
+        '.modal.show >> text=×',
+    ]
+    for selector in text_close_selectors:
+        try:
+            btn = page.locator(selector).first
+            if await btn.count() > 0 and await btn.is_visible(timeout=300):
+                await btn.click(timeout=2_000)
+                await asyncio.sleep(0.4)
+        except Exception:
+            pass
+
+    # ── 2. Esconde via CSS ────────────────────────────────────────────────────
     await page.evaluate("""
         () => {
-            const selectors = [
+            const hide = [
+                // Cookie banners
                 'cookie-police-bar',
                 '.cookie-police-bar',
                 '.cookie-bar',
                 '#cookie-bar',
                 '[class*="cookie"]',
                 '[id*="cookie"]',
+                // Modal backdrops (bloqueia cliques mesmo após fechar o modal)
+                '.modal-backdrop',
+                '[data-region="modal-backdrop"]',
             ];
-            for (const sel of selectors) {
+            for (const sel of hide) {
                 document.querySelectorAll(sel).forEach(el => {
                     el.style.setProperty('display', 'none', 'important');
                     el.style.setProperty('pointer-events', 'none', 'important');
@@ -46,6 +121,12 @@ async def dismiss_overlays(page: Page) -> None:
             }
         }
     """)
+
+    # ── 3. Escape como último recurso ─────────────────────────────────────────
+    try:
+        await page.keyboard.press("Escape")
+    except Exception:
+        pass
 
 
 async def js_click(page: Page, locator) -> None:
