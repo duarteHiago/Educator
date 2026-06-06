@@ -35,7 +35,8 @@ class UserConfig:
 
 def _config_file() -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "config.enc"
+        appdata = os.environ.get("APPDATA") or str(Path.home())
+        return Path(appdata) / "Educator" / "config.enc"
     return Path.home() / ".educator" / "config.enc"
 
 
