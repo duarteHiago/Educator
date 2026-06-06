@@ -144,7 +144,8 @@ async def _wait_for_portal_redirect(page: Page) -> None:
             code_url = urllib.parse.unquote(ru)
             logger.info("login.termo_bypass_navigating", code_url=code_url[:80])
             await page.goto(code_url)
-            await page.wait_for_load_state("networkidle")
+            # ServiceNow é SPA com polling contínuo — networkidle nunca dispara
+            await page.wait_for_load_state("load")
             return
 
     raise RuntimeError(f"Login timeout após {timeout_s:.0f}s — URL: {page.url[:80]}")
