@@ -87,6 +87,8 @@ class ActivityDiscovery:
             title=raw.get("title", ""),
             url=url,
             source=raw.get("source", ""),
+            completed=raw.get("completed", False),
+            grade_string=raw.get("grade_string"),
         )
 
     # ── Query API ─────────────────────────────────────────────────────────────

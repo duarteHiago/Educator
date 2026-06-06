@@ -136,11 +136,54 @@ async def _extract_mod_links(page: Page) -> list[dict]:
         const seen  = new Set();
         document.querySelectorAll('a[href*="/mod/"]').forEach(a => {
             const m = a.href.match(/\/mod\/(\w+)\/(?:view|index)\.php\?(?:id|cm)=(\d+)/);
-            if (m && !seen.has(a.href)) {
-                seen.add(a.href);
-                const text = (a.innerText || a.title || a.getAttribute('aria-label') || '').trim();
-                items.push({ mod: m[1], cmid: parseInt(m[2]), text: text.slice(0, 120), href: a.href });
+            if (!m || seen.has(a.href)) return;
+            seen.add(a.href);
+
+            const text = (a.innerText || a.title || a.getAttribute('aria-label') || '').trim();
+
+            // Detecta completion status do Moodle no container da atividade
+            let completed  = false;
+            let gradeText  = null;
+            const container = a.closest(
+                '[data-activityid], li.activity, div.activity-item, .activity'
+            );
+            if (container) {
+                // Ícone de conclusão automática (src contém "completion-auto-y" ou "completion-manual-y")
+                const autoIcon = container.querySelector(
+                    'img[src*="completion-auto-y"], img[src*="completion-manual-y"],' +
+                    ' .completion-icon[data-completionstate="1"]'
+                );
+                // Botão de conclusão manual marcado como feito
+                const manualDone = container.querySelector(
+                    'button[data-value="1"].btn-completion,' +
+                    ' [data-action="toggle-manual-completion"][aria-checked="true"],' +
+                    ' button.completion-icon-manual-enabled[aria-checked="true"]'
+                );
+                // Classe "complete" no li.activity (tema legado)
+                const legacyDone = container.classList.contains('complete');
+                // Classe "done" em qualquer ícone de completion
+                const anyDone = container.querySelector(
+                    '.completion-icon.done, .automatic-completion-conditions .done,' +
+                    ' .completionsubmit.done'
+                );
+
+                completed = !!(autoIcon || manualDone || legacyDone || anyDone);
+
+                // Tenta capturar texto de nota se disponível
+                const gradeEl = container.querySelector(
+                    '.grade, [data-region="grade"], .completion-grade, .text-muted'
+                );
+                if (gradeEl) gradeText = gradeEl.innerText.trim().slice(0, 80) || null;
             }
+
+            items.push({
+                mod:          m[1],
+                cmid:         parseInt(m[2]),
+                text:         text.slice(0, 120),
+                href:         a.href,
+                completed:    completed,
+                grade_string: gradeText,
+            });
         });
         return items;
     }""")
@@ -175,24 +218,33 @@ async def discover_activities(
     activities: list[dict] = []
     seen_cmids: set[int] = set()
 
-    def _add(mod: str, cmid: int, text: str, href: str, source: str = "direct") -> None:
+    def _add(
+        mod: str, cmid: int, text: str, href: str,
+        source: str = "direct",
+        completed: bool = False,
+        grade_string: str | None = None,
+    ) -> None:
         if cmid in seen_cmids or cmid <= 1:
             return
         seen_cmids.add(cmid)
         cat = _classify(mod)
         activities.append({
-            "cmid":        cmid,
-            "course_id":   course_id,
-            "course_name": course_name,
-            "mod":         mod,
-            "category":    cat,
-            "title":       text or "(sem título)",
-            "url":         href,
-            "source":      source,
+            "cmid":         cmid,
+            "course_id":    course_id,
+            "course_name":  course_name,
+            "mod":          mod,
+            "category":     cat,
+            "title":        text or "(sem título)",
+            "url":          href,
+            "source":       source,
+            "completed":    completed,
+            "grade_string": grade_string,
         })
 
     for link in direct_links:
-        _add(link["mod"], link["cmid"], link["text"], link["href"])
+        _add(link["mod"], link["cmid"], link["text"], link["href"],
+             completed=link.get("completed", False),
+             grade_string=link.get("grade_string"))
 
     if unique_topics:
         if on_progress:
@@ -204,10 +256,13 @@ async def discover_activities(
             await asyncio.sleep(0.8)
             for link in await _extract_mod_links(page):
                 _add(link["mod"], link["cmid"], link["text"], link["href"],
-                     source=f"topic_{topic_id}")
+                     source=f"topic_{topic_id}",
+                     completed=link.get("completed", False),
+                     grade_string=link.get("grade_string"))
 
+    completed_count = sum(1 for a in activities if a.get("completed"))
     logger.info("live_discovery.course_done",
-                course=course_name, total=len(activities))
+                course=course_name, total=len(activities), completed=completed_count)
     return activities
 
 

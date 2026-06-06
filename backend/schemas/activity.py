@@ -26,6 +26,8 @@ class ActivityInfo(BaseModel):
     title:       str
     url:         str
     source:      str = ""     # discovery origin tag ("topic_114956", "direct", ...)
+    completed:   bool = False # detectado pelo Moodle completion tracking no discovery
+    grade_string: str | None = None  # nota como texto, quando disponível no discovery
 
 
 class CourseInventory(BaseModel):
