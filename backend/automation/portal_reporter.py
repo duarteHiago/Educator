@@ -66,7 +66,14 @@ async def report_run(
             "finished_at":         datetime.now(timezone.utc).isoformat(),
         }
 
-        async with httpx.AsyncClient(timeout=10) as client:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            )
+        }
+        async with httpx.AsyncClient(timeout=10, headers=headers) as client:
             resp = await client.post(f"{portal_url}/api/runs/report", json=payload)
             if resp.status_code == 201:
                 logger.info("reporter.ok", extra={"execution_id": ctx.execution_id})
