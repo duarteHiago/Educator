@@ -27,18 +27,22 @@ async def get_browser_context(
     session_dir: per-user directory; if None uses settings.session_file_path.
     """
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=True,
-            slow_mo=50,
-            args=[
-                "--disable-blink-features=AutomationControlled",
+        headless = settings.browser_headless  # False no .exe, True no worker cloud
+        launch_args = ["--disable-blink-features=AutomationControlled"]
+        if headless:
+            # Flags necessários apenas em ambiente Linux/servidor
+            launch_args += [
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-infobars",
                 "--disable-extensions",
-                "--window-size=1280,800",
-            ],
+            ]
+
+        browser = await pw.chromium.launch(
+            headless=headless,
+            slow_mo=settings.browser_slow_mo,
+            args=launch_args,
         )
 
         session_file = (session_dir / "session.json") if session_dir else settings.session_file_path
