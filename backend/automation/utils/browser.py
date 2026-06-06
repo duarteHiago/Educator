@@ -53,7 +53,7 @@ async def get_browser_context(
         else:
             logger.info("browser.new_session")
 
-        context = await browser.new_context(
+        ctx_kwargs: dict = dict(
             storage_state=storage_state,
             viewport={"width": 1280, "height": 800},
             user_agent=(
@@ -62,19 +62,21 @@ async def get_browser_context(
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             locale="pt-BR",
-            java_script_enabled=True,
-            extra_http_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
         )
+        if headless:
+            ctx_kwargs["extra_http_headers"] = {
+                "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            }
 
-        # Mascara navigator.webdriver e outros sinais de automação
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
-            window.chrome = { runtime: {} };
-        """)
+        context = await browser.new_context(**ctx_kwargs)
+
+        if headless:
+            await context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
+                window.chrome = { runtime: {} };
+            """)
 
         context.set_default_timeout(settings.browser_timeout)
         context.set_default_navigation_timeout(settings.browser_timeout)
