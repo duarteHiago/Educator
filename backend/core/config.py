@@ -9,11 +9,11 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Portal UNIC
+    # Portal UNIC — obrigatório no .exe, opcional no worker (usa UserRunContext)
     portal_url: str = "https://alunodigital.unic.br/pda_unic"
     auth_url: str = "https://login.unic.br/"
-    portal_username: str  # CPF sem pontos/traços
-    portal_password: str
+    portal_username: str = ""
+    portal_password: str = ""
 
     # Browser
     browser_headless: bool = False
