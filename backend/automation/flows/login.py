@@ -8,12 +8,15 @@ Fluxo completo:
   4. JavaScript revela campo de senha (sem page reload)
   5. Passo 2 SPA: preenche senha em #login-pass → submit
   6. Kroton valida → POST /loginapi/api/v2/Autenticacao → authorization code
-  7. Redirect de volta para alunodigital.unic.br/krotonpda?code=...
-  8. ServiceNow troca o code por sessão → cookies estabelecidos
+  7. [Opcional] Tela de 2FA enrollment (login.unic.br/auth/2fa/onboarding) → clica "Pular por enquanto"
+  8. [Opcional] Redirect para termo.kroton.com.br (pode retornar 403 em VPS) →
+     extrai redirectUrl da URL e navega diretamente para alunodigital.unic.br/krotonpda?code=...
+  9. ServiceNow troca o code por sessão → cookies estabelecidos
 """
 from __future__ import annotations
 
 import asyncio
+import urllib.parse
 from typing import TYPE_CHECKING
 
 from playwright.async_api import BrowserContext, Page
@@ -30,13 +33,16 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # ─── Seletores confirmados pelo discovery ─────────────────────────────────
-_CPF_SELECTOR      = "#username"
-_PASS_SELECTOR     = "#login-pass"
-_SUBMIT_SELECTOR   = 'button[type="submit"]'
-_AUTH_DOMAIN       = "login.unic.br"
-_PORTAL_DOMAIN     = "alunodigital.unic.br"
-_AVA_SSO_URL       = "https://alunodigital.unic.br/pda_unic?id=krotonpda_acesso_externo&action=moodle"
-_AVA_BASE          = "https://www.avaeduc.com.br"
+_CPF_SELECTOR         = "#username"
+_PASS_SELECTOR        = "#login-pass"
+_SUBMIT_SELECTOR      = 'button[type="submit"]'
+_AUTH_DOMAIN          = "login.unic.br"
+_PORTAL_DOMAIN        = "alunodigital.unic.br"
+_PORTAL_PREFIX        = "https://alunodigital.unic.br"
+_2FA_ONBOARDING_PATH  = "auth/2fa/onboarding"
+_TERMO_DOMAIN         = "termo.kroton.com.br"
+_AVA_SSO_URL          = "https://alunodigital.unic.br/pda_unic?id=krotonpda_acesso_externo&action=moodle"
+_AVA_BASE             = "https://www.avaeduc.com.br"
 # ──────────────────────────────────────────────────────────────────────────
 
 
@@ -76,19 +82,13 @@ async def do_login(page: Page, user_ctx: UserRunContext | None = None) -> None:
     await asyncio.sleep(0.4)
 
     logger.info("login.step2_submit")
+    await page.click(_SUBMIT_SELECTOR)
+    await _wait_for_portal_redirect(page)
 
-    # Aguarda sair do domínio de login (OAuth redirect de volta ao portal)
-    async with page.expect_navigation(
-        url=lambda url: _AUTH_DOMAIN not in url,
-        timeout=settings.browser_timeout,
-    ):
-        await page.click(_SUBMIT_SELECTOR)
-
-    await page.wait_for_load_state("networkidle")
     final_url = page.url
     logger.info("login.complete", landed_on=final_url[:80])
 
-    if _AUTH_DOMAIN in final_url:
+    if _AUTH_DOMAIN in final_url and _2FA_ONBOARDING_PATH not in final_url:
         error_msg = ""
         try:
             el = page.locator(".alert, .error, [class*='error']").first
@@ -96,6 +96,58 @@ async def do_login(page: Page, user_ctx: UserRunContext | None = None) -> None:
         except Exception:
             pass
         raise RuntimeError(f"Login falhou — ainda em {_AUTH_DOMAIN}. Msg: '{error_msg}'")
+
+
+async def _wait_for_portal_redirect(page: Page) -> None:
+    """
+    Aguarda o login completar lidando com intermediários opcionais:
+
+    - login.unic.br/auth/2fa/onboarding  → clica "Pular por enquanto"
+    - termo.kroton.com.br (403 em VPS)   → extrai redirectUrl da URL e navega diretamente
+    - alunodigital.unic.br               → sucesso, retorna
+
+    Necessário porque IPs de datacenter recebem o redirect para termo.kroton.com.br
+    que retorna 403. O workaround é pular diretamente para o krotonpda?code=... que
+    está no parâmetro redirectUrl da URL do termo.
+    """
+    timeout_s = settings.browser_timeout / 1000
+    deadline  = asyncio.get_event_loop().time() + timeout_s
+
+    while asyncio.get_event_loop().time() < deadline:
+        await asyncio.sleep(1)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5_000)
+        except Exception:
+            pass
+
+        url = page.url
+
+        if url.startswith(_PORTAL_PREFIX):
+            return
+
+        if _2FA_ONBOARDING_PATH in url:
+            logger.info("login.2fa_onboarding_detected")
+            try:
+                await page.get_by_text("Pular por enquanto").click(timeout=5_000)
+                logger.info("login.2fa_skipped")
+            except Exception:
+                pass
+            continue
+
+        if _TERMO_DOMAIN in url:
+            logger.info("login.termo_bypass_start")
+            parsed = urllib.parse.urlparse(url)
+            params = urllib.parse.parse_qs(parsed.query)
+            ru = params.get("redirectUrl", [""])[0]
+            if not ru:
+                raise RuntimeError("termo.kroton.com.br não retornou redirectUrl")
+            code_url = urllib.parse.unquote(ru)
+            logger.info("login.termo_bypass_navigating", code_url=code_url[:80])
+            await page.goto(code_url)
+            await page.wait_for_load_state("networkidle")
+            return
+
+    raise RuntimeError(f"Login timeout após {timeout_s:.0f}s — URL: {page.url[:80]}")
 
 
 async def _establish_ava_session(page: Page, context: BrowserContext) -> Page:
