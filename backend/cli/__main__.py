@@ -43,7 +43,30 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _install_browser() -> None:
+def _chromium_exe_path() -> Path | None:
+    """Retorna o caminho esperado do executável Chromium ou None se não detectável."""
+    try:
+        if getattr(sys, "frozen", False):
+            local_browsers = (
+                Path(sys._MEIPASS)
+                / "playwright" / "driver" / "package" / ".local-browsers"
+            )
+            if local_browsers.exists():
+                for entry in local_browsers.iterdir():
+                    if entry.name.startswith("chromium"):
+                        exe = entry / "chrome-win64" / "chrome.exe"
+                        if exe.exists():
+                            return exe
+            return None  # pasta não existe ou sem chromium instalado
+        else:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                return Path(p.chromium.executable_path)
+    except Exception:
+        return None
+
+
+def _install_browser(exit_after: bool = True) -> None:
     print("Instalando Chromium (pode demorar alguns minutos)...")
 
     if getattr(sys, "frozen", False):
@@ -60,10 +83,13 @@ def _install_browser() -> None:
         )
 
     if result.returncode == 0:
-        print("Chromium instalado com sucesso.")
+        print("Chromium instalado com sucesso.\n")
     else:
         print("Erro na instalação. Tente executar novamente.")
-    sys.exit(result.returncode)
+        sys.exit(1)
+
+    if exit_after:
+        sys.exit(0)
 
 
 def _show_welcome_screen() -> None:
@@ -167,8 +193,13 @@ def main() -> None:
     args = _parse_args()
 
     if args.install_browser:
-        _install_browser()
+        _install_browser(exit_after=True)
         return
+
+    # Auto-instala Chromium se ainda não existir (atualização de versão do Playwright)
+    if _chromium_exe_path() is None:
+        print("Chromium não encontrado. Instalando automaticamente...")
+        _install_browser(exit_after=False)
 
     # Deve rodar ANTES de qualquer import de backend.*
     from backend.core.user_config import init_user_config, load, reset
