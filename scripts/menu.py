@@ -395,9 +395,56 @@ def _prompt_and_run_discovery() -> bool:
     return total > 0
 
 
+# ── Configurações ─────────────────────────────────────────────────────────────
+
+def _select_action() -> str | None:
+    return questionary.select(
+        "O que deseja fazer?",
+        choices=[
+            questionary.Choice("Executar atividades", value="executar"),
+            questionary.Choice("Configurações  — CPF, senha do AVA, token", value="config"),
+            questionary.Separator(),
+            questionary.Choice("Sair", value="sair"),
+        ],
+        style=_STYLE,
+    ).ask()
+
+
+def _open_settings() -> None:
+    """
+    Abre o editor de credenciais e recarrega os valores no settings em memória.
+
+    Sem esse resync o processo seguiria usando a senha antiga até ser reaberto,
+    que é justamente o problema que esta tela existe para resolver.
+    """
+    from backend.cli.config_menu import run_config_menu
+    from backend.core import user_config
+    from backend.core.config import settings
+
+    run_config_menu()
+
+    config = user_config.load()
+    if config is None:
+        return
+
+    settings.portal_username = config.cpf
+    settings.portal_password = config.ava_password
+    settings.proxy_token     = config.proxy_token
+    settings.proxy_url       = config.proxy_url
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    while True:
+        action = _select_action()
+        if action in (None, "sair"):
+            console.print("[dim]  Saindo.[/dim]")
+            return
+        if action != "config":
+            break
+        _open_settings()
+
     if _map_is_empty():
         ok = _prompt_and_run_discovery()
         if not ok:

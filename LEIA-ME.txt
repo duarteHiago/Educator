@@ -16,11 +16,26 @@ PRIMEIRO USO
 USO NORMAL
 ----------
 - Basta executar "educator.exe"
+- No menu, escolha "Executar atividades"
 - Selecione a materia e as unidades desejadas
 - Escolha o modo: AUTO_MODE (submete) ou DRY_RUN (so visualiza)
 
-REDEFINIR CREDENCIAIS
----------------------
+ERROU A SENHA DO AVA? (ou o CPF / token)
+----------------------------------------
+Abra "educator.exe" e escolha "Configuracoes" no menu.
+De lá voce pode:
+   - Trocar a senha do AVA (pedida duas vezes, para evitar erro de digitacao)
+   - Corrigir o CPF
+   - Trocar o token de acesso
+   - Testar o login no AVA na hora, para confirmar que funcionou
+
+Cada item e alterado sozinho: trocar a senha nao apaga o token nem o CPF.
+
+Pelo terminal, o atalho e:
+   educator.exe --config
+
+APAGAR TUDO E COMECAR DE NOVO
+-----------------------------
 Execute no terminal dentro desta pasta:
    educator.exe --reset-config
 

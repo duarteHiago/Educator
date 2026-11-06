@@ -9,6 +9,7 @@ Fluxo de inicialização (ordem importa):
 
 Flags:
   --install-browser   Instala o Chromium via Playwright (rodar uma vez após setup.bat)
+  --config            Abre o editor de credenciais (corrige senha do AVA, CPF ou token)
   --reset-config      Apaga config.enc e solicita novas credenciais
   (nenhuma flag)      Abre o menu principal
 """
@@ -34,6 +35,11 @@ def _parse_args() -> argparse.Namespace:
         "--install-browser",
         action="store_true",
         help="Instala o navegador Chromium (necessário apenas na primeira vez)",
+    )
+    parser.add_argument(
+        "--config",
+        action="store_true",
+        help="Abre o editor de credenciais (senha do AVA, CPF, token)",
     )
     parser.add_argument(
         "--reset-config",
@@ -204,6 +210,20 @@ def main() -> None:
 
     # Deve rodar ANTES de qualquer import de backend.*
     from backend.core.user_config import init_user_config, load, reset
+
+    if args.config:
+        _ensure_logs_dir()
+        from backend.core.config import settings
+        from backend.core.logging import configure_logging
+        # silent_console para os logs do teste de login nao poluirem a tela
+        configure_logging(
+            log_level=settings.log_level,
+            log_file=settings.log_file,
+            silent_console=True,
+        )
+        from backend.cli.config_menu import run_config_menu
+        run_config_menu()
+        return
 
     if args.reset_config:
         reset()

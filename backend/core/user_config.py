@@ -22,7 +22,15 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
 # URL do proxy VPS — alterar antes de buildar nova versão do .exe
-_PROXY_URL = "http://72.60.150.220:4000"
+_PROXY_URL = "https://educator.yaatoro.com/llm/v1"
+
+# URLs usadas por versões anteriores do .exe. A porta 4000 nunca foi exposta
+# publicamente (o LiteLLM escuta só em loopback), então configs antigos são
+# migrados no load() em vez de obrigar o usuário a reconfigurar tudo.
+_LEGACY_PROXY_URLS = frozenset({
+    "http://72.60.150.220:4000",
+    "https://72.60.150.220:4000",
+})
 
 
 @dataclass
@@ -54,9 +62,15 @@ def load() -> UserConfig | None:
         raw = path.read_bytes()
         decrypted = Fernet(_derive_key()).decrypt(raw)
         d = json.loads(decrypted.decode())
-        return UserConfig(**d)
-    except (InvalidToken, KeyError, json.JSONDecodeError):
+        config = UserConfig(**d)
+    except (InvalidToken, KeyError, TypeError, json.JSONDecodeError):
         return None
+
+    if config.proxy_url in _LEGACY_PROXY_URLS:
+        config.proxy_url = _PROXY_URL
+        save(config)
+
+    return config
 
 
 def save(config: UserConfig) -> None:
@@ -70,6 +84,26 @@ def reset() -> None:
     path = _config_file()
     if path.exists():
         path.unlink()
+
+
+def update(**fields: str) -> UserConfig | None:
+    """
+    Altera campos isolados do config.enc preservando os demais.
+    Use no lugar de reset() quando só uma credencial estiver errada —
+    evita que o usuário tenha que digitar token e CPF de novo.
+    Retorna None se ainda não existe config salvo.
+    """
+    config = load()
+    if config is None:
+        return None
+
+    for key, value in fields.items():
+        if not hasattr(config, key):
+            raise KeyError(f"campo desconhecido em UserConfig: {key}")
+        setattr(config, key, value)
+
+    save(config)
+    return config
 
 
 def run_wizard() -> UserConfig:
